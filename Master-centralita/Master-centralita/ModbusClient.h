@@ -15,6 +15,7 @@ public:
     // Operaciones Modbus (FC03 y FC06)
     BOOL LeerRegistro(BYTE unitId, WORD direccion, short& valor);
     BOOL EscribirRegistro(BYTE unitId, WORD direccion, short valor);
+    BOOL EstaConectado() const { return m_bConectado; }
 
 private:
     CSocket m_socket; // Socket persistente siguiendo el estilo de los ejercicios 

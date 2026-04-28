@@ -10,7 +10,7 @@ class CMastercentralitaDlg : public CDialogEx
 {
 // Construction
 public:
-	CMastercentralitaDlg(CWnd* pParent = nullptr);	// standard constructor
+	CMastercentralitaDlg(CWnd* pParent = nullptr); // standard constructor
 
 // Dialog Data
 #ifdef AFX_DESIGN_TIME
@@ -23,6 +23,7 @@ public:
 
 // Implementation
 protected:
+
 	// Variables de estado para los LEDs
 	BOOL m_statusBrake;
 	BOOL m_statusLeft;
@@ -32,10 +33,11 @@ protected:
 	CBrush m_brushRed;    // Para el Freno
 	CBrush m_brushYellow; // Para Intermitentes
 	CBrush m_brushGray;   // Para estado OFF
+	CBrush m_brushGreen;
 
-	CModbusClient m_modbusMotor;          // Para el puerto 502
-	CModbusClient m_modbusAccionamientos; // Para el puerto 503 en realidad son variables... pero weno
-	CModbusClient m_modbusLuces;          // Para el puerto 504
+	CModbusClient m_modbusMotor;          // Para el puerto 3502
+	CModbusClient m_modbusAccionamientos; // Para el puerto 3503 en realidad son variables... pero weno
+	CModbusClient m_modbusLuces;          // Para el puerto 3504
 	HICON m_hIcon;
 	void actualizarInterfazAccionamientos(short brake, short left, short right);
 	// Generated message map functions
@@ -46,6 +48,8 @@ protected:
 	afx_msg void OnTimer(UINT_PTR nIDEvent);
 	DECLARE_MESSAGE_MAP()
 public:
+	bool m_blinkState;      // true=encendido, false=apagado para intermitentes
+	UINT_PTR m_blinkTimer;  // ID del timer de parpadeo
 	afx_msg void OnStnClickedLedAccionamientos();
 	CString m_ipAccionamientos;
 	int m_portAccionamientos;
