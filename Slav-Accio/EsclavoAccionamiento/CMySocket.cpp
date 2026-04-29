@@ -5,43 +5,58 @@
 
 void CMySocket::OnAccept(int err)
 {
-	CString cs, cs1; UINT port;
-	static bool col = true;
-	CSocket client;
-	Accept(client);
-	client.GetSockName(cs, port);
-	cs1.Format("%d conectado", port);
-	cs += cs1;
-	pDlg->SetDlgItemText(IDC_MSG, cs1);
+    if (err != 0) return;
 
-    // Modbus TCP max packet is 260 bytes
+    CString cs, cs1;
+    UINT port;
+    CSocket client;
+
+    if (!Accept(client))
+    {
+        pDlg->SetDlgItemText(IDC_MSG, "Accept() failed");
+        return;
+    }
+
+    client.GetSockName(cs, port);
+    cs1.Format("%d conectado", port);
+    pDlg->SetDlgItemText(IDC_MSG, cs1);
+
     unsigned char buf[300];
     unsigned char response[300];
 
-    while (true) {
-        // Receive the raw binary Modbus request
-        int len = client.Receive(buf, 300);
+    while (true)
+    {
+        int len = client.Receive(buf, sizeof(buf));
 
-        if (len <= 0) break; pDlg->SetDlgItemText(IDC_MSG, "Conex. ERROR"); ; // Connection closed or error
+        // Fixed: handle error and closed connection separately, with proper messages
+        if (len == SOCKET_ERROR)
+        {
+            pDlg->SetDlgItemText(IDC_MSG, "Conex. ERROR");
+            break;
+        }
+        if (len == 0)
+        {
+            // Graceful disconnect by master
+            break;
+        }
 
-        // Use the helper class to parse and generate response
-        // We pass the booleans and a Slave ID (here set to 1)
+        // Pass regBase=0 if Modbus Doctor sends 0-based addresses,
+        // or regBase=400 if it sends the raw holding register number
         int resLen = CModbusSlave::BuildResponse(
-            buf,
-            len,
-            response,
+            buf, len, response,
             (pDlg->m_fren != 0),
-            (pDlg->m_izq != 0),
-            (pDlg->m_der != 0),
-            1
+            (pDlg->m_izq  != 0),
+            (pDlg->m_der  != 0),
+            1,    // Slave ID
+            0     // <-- Try 0 first; change to 400 if still not working
         );
 
-        if (resLen > 0) {
+        if (resLen > 0)
+        {
             client.Send(response, resLen);
         }
     }
 
-
-	client.Close();
-	pDlg->SetDlgItemText(IDC_MSG, "Conex. Terminada");
+    client.Close();
+    pDlg->SetDlgItemText(IDC_MSG, "Conex. Terminada");
 }
