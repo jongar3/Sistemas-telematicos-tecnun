@@ -65,6 +65,9 @@ CMastercentralitaDlg::CMastercentralitaDlg(CWnd* pParent /*=nullptr*/)
 	m_brushRed.CreateSolidBrush(RGB(255, 0, 0));      // Rojo brillante
 	m_brushYellow.CreateSolidBrush(RGB(255, 255, 0)); // Amarillo/Naranja
 	m_brushGray.CreateSolidBrush(RGB(160, 160, 160)); // Gris oscuro
+	m_brushGreen.CreateSolidBrush(RGB(0, 255, 0));
+	m_blinkState = false;
+	m_blinkTimer = 0;
 
 }
 
@@ -76,7 +79,6 @@ void CMastercentralitaDlg::DoDataExchange(CDataExchange* pDX)
 	DDX_Control(pDX, IDC_LED_ACCIONAMIENTOS, m_led2);
 	DDX_Control(pDX, IDC_LED_ACCIONAMIENTOS3, m_led2i);
 	DDX_Control(pDX, IDC_LED_ACCIONAMIENTOS2, m_led2_d);
-	DDX_Control(pDX, IDC_LED_ACCIONAMIENTOS4, m_led2f);
 	DDX_Text(pDX, IDC_POLLING, m_pollingMs);
 	DDX_Control(pDX, IDC_LOG, m_log);
 }
@@ -87,6 +89,7 @@ BEGIN_MESSAGE_MAP(CMastercentralitaDlg, CDialogEx)
 	ON_WM_QUERYDRAGICON()
 	ON_BN_CLICKED(IDOK, &CMastercentralitaDlg::OnBnClickedOk)
 	ON_WM_CTLCOLOR()
+	ON_WM_TIMER()
 END_MESSAGE_MAP()
 
 
@@ -137,8 +140,13 @@ void CMastercentralitaDlg::actualizarInterfazAccionamientos(short brake, short l
 
 	// Forzamos el repintado de los controles específicos para que salte OnCtlColor
 	GetDlgItem(IDC_LED_ACCIONAMIENTOS)->Invalidate();
+	GetDlgItem(IDC_LED_ACCIONAMIENTOS)->UpdateWindow();
+
 	GetDlgItem(IDC_LED_ACCIONAMIENTOS2)->Invalidate();
+	GetDlgItem(IDC_LED_ACCIONAMIENTOS2)->UpdateWindow();
+
 	GetDlgItem(IDC_LED_ACCIONAMIENTOS3)->Invalidate();
+	GetDlgItem(IDC_LED_ACCIONAMIENTOS3)->UpdateWindow();
 }
 
 
@@ -202,7 +210,7 @@ void CMastercentralitaDlg::OnBnClickedOk()
 {
 	// TODO: Add your control notification handler code here
 	UpdateData(TRUE);
-	BOOL c2 = m_modbusAccionamientos.Conectar(m_ipAccionamientos, 3502); //TODO PONER VARIABLE!
+	BOOL c2 = m_modbusAccionamientos.Conectar(m_ipAccionamientos, m_portAccionamientos); 
 	CTime time = CTime::GetCurrentTime();
 	CString strLog;
 	if (!is_running) {
@@ -211,8 +219,8 @@ void CMastercentralitaDlg::OnBnClickedOk()
 			is_running = true;
 			//escribimos los logs
 			if (c2) {
-				strLog.Format(_T("[%02d:%02d:%02d] Accionamientos definido en 127.0.0.1:503"),
-					time.GetHour(), time.GetMinute(), time.GetSecond());
+				strLog.Format(_T("[%02d:%02d:%02d] Accionamientos conectado en %s:%d"), time.GetHour(), time.GetMinute(), time.GetSecond(),
+				m_ipAccionamientos, m_portAccionamientos);
 			}
 			else {
 				strLog.Format(_T("[%02d:%02d:%02d] ERROR: No se pudo conectar a Accionamientos"),
@@ -220,11 +228,15 @@ void CMastercentralitaDlg::OnBnClickedOk()
 			}
 			m_log.AddString(strLog);
 			SetTimer(1, m_pollingMs, NULL); // Iniciamos el timer con ID 1
+			SetTimer(2, 500, NULL);           // parpadeo intermitentes ID 2
 		}
 	}
 	else {
 		KillTimer(1);
+		KillTimer(2);
 	}
+	GetDlgItem(IDC_LED_ACCIONAMIENTOS6)->Invalidate();
+	GetDlgItem(IDC_LED_ACCIONAMIENTOS6)->UpdateWindow();
 }
 
 
@@ -239,7 +251,7 @@ void CMastercentralitaDlg::OnTimer(UINT_PTR nIDEvent)
 		// Registro 401: Intermitente Izquierdo
 		// Registro 402: Intermitente Derecho
 
-		// Nota: Tu clase ReadRegister lee 1 registro por llamada
+
 		BOOL res1 = m_modbusAccionamientos.LeerRegistro(0x01, 400, brakeVal);
 		BOOL res2 = m_modbusAccionamientos.LeerRegistro(0x01, 401, leftVal);
 		BOOL res3 = m_modbusAccionamientos.LeerRegistro(0x01, 402, rightVal);
@@ -249,6 +261,12 @@ void CMastercentralitaDlg::OnTimer(UINT_PTR nIDEvent)
 			// Lógica para actualizar los LEDs en la interfaz
 			// Si el valor es 1 (On), mostramos color o activamos control
 			actualizarInterfazAccionamientos(brakeVal, leftVal, rightVal);
+			CTime time = CTime::GetCurrentTime();
+			CString strLog;
+			strLog.Format(_T("[%02d:%02d:%02d] Brake=%d  Left=%d  Right=%d"), time.GetHour(), time.GetMinute(), time.GetSecond(), brakeVal, leftVal, rightVal);
+			int idx = m_log.AddString(strLog);
+			m_log.SetCurSel(idx);
+
 		}else{
 			// Log de error si falla la comunicación en el timer
 			CTime time = CTime::GetCurrentTime();
@@ -258,6 +276,16 @@ void CMastercentralitaDlg::OnTimer(UINT_PTR nIDEvent)
 			m_log.SetCurSel(idx);
 		}
 	}
+	else if (nIDEvent == 2) // Timer de parpadeo
+	{
+		m_blinkState = !m_blinkState;
+
+		GetDlgItem(IDC_LED_ACCIONAMIENTOS2)->Invalidate();
+		GetDlgItem(IDC_LED_ACCIONAMIENTOS2)->UpdateWindow();
+		GetDlgItem(IDC_LED_ACCIONAMIENTOS3)->Invalidate();
+		GetDlgItem(IDC_LED_ACCIONAMIENTOS3)->UpdateWindow();
+	}
+
 	CDialogEx::OnTimer(nIDEvent);
 }
 
@@ -285,6 +313,10 @@ HBRUSH CMastercentralitaDlg::OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor)
 	// TODO:  Change any attributes of the DC here
 	int controlID = pWnd->GetDlgCtrlID();
 
+	
+	
+	//-----ACCIONAMIENTOS-----
+
 	// LED de FRENO
 	if (controlID == IDC_LED_ACCIONAMIENTOS) {
 		if (m_statusBrake) {
@@ -295,8 +327,8 @@ HBRUSH CMastercentralitaDlg::OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor)
 	}
 
 	// LED de INTERMITENTE IZQ
-	if (controlID == IDC_LED_ACCIONAMIENTOS2) {
-		if (m_statusLeft) {
+	if (controlID == IDC_LED_ACCIONAMIENTOS3) {
+		if (m_statusLeft && m_blinkState) {  
 			pDC->SetBkColor(RGB(255, 255, 0));
 			return m_brushYellow;
 		}
@@ -304,10 +336,18 @@ HBRUSH CMastercentralitaDlg::OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor)
 	}
 
 	// LED de INTERMITENTE DER
-	if (controlID == IDC_LED_ACCIONAMIENTOS3) {
-		if (m_statusRight) {
+	if (controlID == IDC_LED_ACCIONAMIENTOS2) {
+		if (m_statusRight && m_blinkState) { 
 			pDC->SetBkColor(RGB(255, 255, 0));
 			return m_brushYellow;
+		}
+		return m_brushGray;
+	}
+	// LED de CONEXIÓN
+	if (controlID == IDC_LED_ACCIONAMIENTOS6) {
+		if (m_modbusAccionamientos.EstaConectado()) {
+			pDC->SetBkColor(RGB(0, 255, 0));
+			return m_brushGreen;
 		}
 		return m_brushGray;
 	}
