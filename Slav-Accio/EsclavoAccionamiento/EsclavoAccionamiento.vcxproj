@@ -45,7 +45,7 @@
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <PlatformToolset>v143</PlatformToolset>
-    <CharacterSet>Unicode</CharacterSet>
+    <CharacterSet>NotSet</CharacterSet>
     <UseOfMfc>Dynamic</UseOfMfc>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
@@ -183,14 +183,17 @@
     </ResourceCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="CMySocket.h" />
     <ClInclude Include="EsclavoAccionamiento.h" />
     <ClInclude Include="EsclavoAccionamientoDlg.h" />
     <ClInclude Include="framework.h" />
+    <ClInclude Include="ModBusSlave.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="targetver.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="CMySocket.cpp" />
     <ClCompile Include="EsclavoAccionamiento.cpp" />
     <ClCompile Include="EsclavoAccionamientoDlg.cpp" />
     <ClCompile Include="pch.cpp">

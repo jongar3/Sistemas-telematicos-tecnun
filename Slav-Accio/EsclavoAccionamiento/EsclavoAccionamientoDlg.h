@@ -3,7 +3,7 @@
 //
 
 #pragma once
-
+#include "CMySocket.h"
 
 // CEsclavoAccionamientoDlg dialog
 class CEsclavoAccionamientoDlg : public CDialogEx
@@ -31,4 +31,11 @@ protected:
 	afx_msg void OnPaint();
 	afx_msg HCURSOR OnQueryDragIcon();
 	DECLARE_MESSAGE_MAP()
+public:
+	int m_port;
+	afx_msg void OnBnClickedStart();
+	CString m_msg;
+	BOOL m_fren;
+	BOOL m_izq;
+	BOOL m_der;
 };

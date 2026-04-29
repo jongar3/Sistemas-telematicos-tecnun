@@ -7,6 +7,7 @@
 #include "EsclavoAccionamiento.h"
 #include "EsclavoAccionamientoDlg.h"
 #include "afxdialogex.h"
+#include "CMySocket.h"
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -48,10 +49,13 @@ END_MESSAGE_MAP()
 
 // CEsclavoAccionamientoDlg dialog
 
-
-
 CEsclavoAccionamientoDlg::CEsclavoAccionamientoDlg(CWnd* pParent /*=nullptr*/)
 	: CDialogEx(IDD_ESCLAVOACCIONAMIENTO_DIALOG, pParent)
+	, m_port(0)
+	, m_msg(_T(""))
+	, m_fren(FALSE)
+	, m_izq(FALSE)
+	, m_der(FALSE)
 {
 	m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
 }
@@ -59,12 +63,18 @@ CEsclavoAccionamientoDlg::CEsclavoAccionamientoDlg(CWnd* pParent /*=nullptr*/)
 void CEsclavoAccionamientoDlg::DoDataExchange(CDataExchange* pDX)
 {
 	CDialogEx::DoDataExchange(pDX);
+	DDX_Text(pDX, IDC_port, m_port);
+	DDX_Text(pDX, IDC_MSG, m_msg);
+	DDX_Check(pDX, IDC_FREN, m_fren);
+	DDX_Check(pDX, IDC_IZQ, m_izq);
+	DDX_Check(pDX, IDC_DER, m_der);
 }
 
 BEGIN_MESSAGE_MAP(CEsclavoAccionamientoDlg, CDialogEx)
 	ON_WM_SYSCOMMAND()
 	ON_WM_PAINT()
 	ON_WM_QUERYDRAGICON()
+	ON_BN_CLICKED(IDC_START, &CEsclavoAccionamientoDlg::OnBnClickedStart)
 END_MESSAGE_MAP()
 
 
@@ -100,6 +110,12 @@ BOOL CEsclavoAccionamientoDlg::OnInitDialog()
 	SetIcon(m_hIcon, FALSE);		// Set small icon
 
 	// TODO: Add extra initialization here
+	
+	m_port = 3503;
+
+	m_msg = "Socket sin crear";
+
+	UpdateData(false);
 
 	return TRUE;  // return TRUE  unless you set the focus to a control
 }
@@ -152,4 +168,30 @@ HCURSOR CEsclavoAccionamientoDlg::OnQueryDragIcon()
 {
 	return static_cast<HCURSOR>(m_hIcon);
 }
+
+
+void CEsclavoAccionamientoDlg::OnBnClickedStart()
+{
+	// TODO: Add your control notification handler code here
+
+	UpdateData(true);
+
+	CMySocket* misoc;
+	misoc = new CMySocket(this);
+	int puerto = (int)m_port;
+	bool ret = misoc->Create(puerto, SOCK_STREAM);
+	
+	if (!ret) MessageBox("Error al crear el socket");
+	
+	ret = misoc->Listen();
+	
+	if (!ret) MessageBox("Error al quedar a la escucha...");
+	
+	m_msg = "Esperando Conexion...";
+	
+	UpdateData(false);
+	
+
+}
+
 
