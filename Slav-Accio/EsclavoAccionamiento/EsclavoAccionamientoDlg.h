@@ -38,4 +38,7 @@ public:
 	BOOL m_fren;
 	BOOL m_izq;
 	BOOL m_der;
+	afx_msg void OnBnClickedFreno();
+	afx_msg void OnBnClickedIzq();
+	afx_msg void OnBnClickedDer();
 };

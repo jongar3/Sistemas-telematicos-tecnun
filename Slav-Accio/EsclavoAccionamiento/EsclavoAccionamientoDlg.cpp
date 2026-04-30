@@ -75,6 +75,9 @@ BEGIN_MESSAGE_MAP(CEsclavoAccionamientoDlg, CDialogEx)
 	ON_WM_PAINT()
 	ON_WM_QUERYDRAGICON()
 	ON_BN_CLICKED(IDC_START, &CEsclavoAccionamientoDlg::OnBnClickedStart)
+	ON_BN_CLICKED(IDC_FREN, &CEsclavoAccionamientoDlg::OnBnClickedFreno)
+	ON_BN_CLICKED(IDC_IZQ, &CEsclavoAccionamientoDlg::OnBnClickedIzq)
+	ON_BN_CLICKED(IDC_DER, &CEsclavoAccionamientoDlg::OnBnClickedDer)
 END_MESSAGE_MAP()
 
 
@@ -195,3 +198,23 @@ void CEsclavoAccionamientoDlg::OnBnClickedStart()
 }
 
 
+
+void CEsclavoAccionamientoDlg::OnBnClickedFreno()
+{
+	UpdateData(true);
+	// TODO: Add your control notification handler code here
+}
+
+void CEsclavoAccionamientoDlg::OnBnClickedIzq()
+{
+	UpdateData(true);
+	// TODO: Add your control notification handler code here
+}
+
+
+
+void CEsclavoAccionamientoDlg::OnBnClickedDer()
+{
+	UpdateData(true);
+	// TODO: Add your control notification handler code here
+}

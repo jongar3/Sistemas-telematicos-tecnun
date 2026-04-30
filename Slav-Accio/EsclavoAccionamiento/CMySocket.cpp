@@ -1,22 +1,27 @@
 #include "pch.h"
 #include "CMySocket.h"
-#include "EsclavoACcionamientoDlg.h"
+#include "EsclavoAccionamientoDlg.h"
 #include "ModBusSlave.h"
 
-void CMySocket::OnAccept(int err)
-{
-    if (err != 0) return;
+struct ClientContext {
+    SOCKET rawSocket;
+    CEsclavoAccionamientoDlg* pDlg;
+};
 
+static UINT ClientThreadProc(LPVOID pParam)
+{
+    ClientContext* ctx = (ClientContext*)pParam;
+    CEsclavoAccionamientoDlg* pDlg = ctx->pDlg;
+    SOCKET rawSock = ctx->rawSocket;  // save before delete
+    delete ctx;
+
+    // Re-attach the socket in this new thread (MFC requirement)
+    CSocket client;
+    client.Attach(rawSock);
+
+    // ── Your original working logic, untouched ──────────────────
     CString cs, cs1;
     UINT port;
-    CSocket client;
-
-    if (!Accept(client))
-    {
-        pDlg->SetDlgItemText(IDC_MSG, "Accept() failed");
-        return;
-    }
-
     client.GetSockName(cs, port);
     cs1.Format("%d conectado", port);
     pDlg->SetDlgItemText(IDC_MSG, cs1);
@@ -28,7 +33,6 @@ void CMySocket::OnAccept(int err)
     {
         int len = client.Receive(buf, sizeof(buf));
 
-        // Fixed: handle error and closed connection separately, with proper messages
         if (len == SOCKET_ERROR)
         {
             pDlg->SetDlgItemText(IDC_MSG, "Conex. ERROR");
@@ -36,27 +40,45 @@ void CMySocket::OnAccept(int err)
         }
         if (len == 0)
         {
-            // Graceful disconnect by master
-            break;
+            break;  // graceful disconnect
         }
 
-        // Pass regBase=0 if Modbus Doctor sends 0-based addresses,
-        // or regBase=400 if it sends the raw holding register number
         int resLen = CModbusSlave::BuildResponse(
             buf, len, response,
             (pDlg->m_fren != 0),
             (pDlg->m_izq  != 0),
             (pDlg->m_der  != 0),
             1,    // Slave ID
-            400     // <-- Try 0 first; change to 400 if still not working
+            400   // regBase
         );
 
         if (resLen > 0)
-        {
             client.Send(response, resLen);
-        }
     }
 
     client.Close();
     pDlg->SetDlgItemText(IDC_MSG, "Conex. Terminada");
+    // ── End of original logic ───────────────────────────────────
+
+    return 0;
+}
+
+void CMySocket::OnAccept(int err)
+{
+    if (err != 0) return;
+
+    CSocket tempClient;
+    if (!Accept(tempClient))
+    {
+        pDlg->SetDlgItemText(IDC_MSG, "Accept() failed");
+        return;
+    }
+
+    // Detach the handle and pass it to the worker thread
+    ClientContext* ctx = new ClientContext();
+    ctx->rawSocket = tempClient.Detach();
+    ctx->pDlg      = pDlg;
+
+    AfxBeginThread(ClientThreadProc, ctx);
+    // OnAccept returns immediately — UI stays responsive
 }
