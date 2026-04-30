@@ -48,7 +48,7 @@ void CMySocket::OnAccept(int err)
             (pDlg->m_izq  != 0),
             (pDlg->m_der  != 0),
             1,    // Slave ID
-            0     // <-- Try 0 first; change to 400 if still not working
+            400     // <-- Try 0 first; change to 400 if still not working
         );
 
         if (resLen > 0)
