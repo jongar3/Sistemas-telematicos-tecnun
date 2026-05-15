@@ -32,6 +32,8 @@ public:
 // Implementation
 protected:
 	DECLARE_MESSAGE_MAP()
+public:
+//	afx_msg void OnTimer(UINT_PTR nIDEvent);
 };
 
 CAboutDlg::CAboutDlg() : CDialogEx(IDD_ABOUTBOX)
@@ -44,6 +46,7 @@ void CAboutDlg::DoDataExchange(CDataExchange* pDX)
 }
 
 BEGIN_MESSAGE_MAP(CAboutDlg, CDialogEx)
+//	ON_WM_TIMER()
 END_MESSAGE_MAP()
 
 
@@ -86,6 +89,8 @@ BEGIN_MESSAGE_MAP(CSlavLightDlg, CDialogEx)
 	ON_WM_PAINT()
 	ON_WM_QUERYDRAGICON()
 	ON_BN_CLICKED(IDC_START, &CSlavLightDlg::OnBnClickedStart)
+	ON_MESSAGE(WM_UPDATE_MODBUS_DATA, &CSlavLightDlg::OnUpdateModbusData)
+	ON_WM_TIMER()
 END_MESSAGE_MAP()
 
 
@@ -128,6 +133,9 @@ BOOL CSlavLightDlg::OnInitDialog()
 
 	UpdateData(false);
 
+	m_blinkState = false;
+	SetTimer(1, 300, NULL);
+
 	return TRUE;  // return TRUE  unless you set the focus to a control
 }
 
@@ -147,6 +155,20 @@ void CSlavLightDlg::OnSysCommand(UINT nID, LPARAM lParam)
 // If you add a minimize button to your dialog, you will need the code below
 //  to draw the icon.  For MFC applications using the document/view model,
 //  this is automatically done for you by the framework.
+
+LRESULT CSlavLightDlg::OnUpdateModbusData(WPARAM wParam, LPARAM lParam)
+{
+	// Pushes the new m_v500, m_v501, etc. values to your Edit boxes
+	UpdateData(FALSE);
+
+	m_status.Invalidate(FALSE);
+	m_izqdel.Invalidate(FALSE);
+	m_derdel.Invalidate(FALSE);
+	m_dertra.Invalidate(FALSE);
+	m_izqtra.Invalidate(FALSE);
+
+	return 0;
+}
 
 void CSlavLightDlg::OnPaint()
 {
@@ -169,7 +191,49 @@ void CSlavLightDlg::OnPaint()
 	}
 	else
 	{
-		CDialogEx::OnPaint();
+		CRect r;
+		COLORREF colorRed = RGB(255, 0, 0);
+		COLORREF colorWhite = RGB(255, 255, 255);
+
+		// --- STATUS (v500) - Solid (No Blink) ---
+		if (m_status.GetSafeHwnd())
+		{
+			CClientDC dc(&m_status); // Use CClientDC when painting on children inside Parent's OnPaint
+			m_status.GetClientRect(r);
+			dc.FillSolidRect(r, (m_v500 != 0) ? colorRed : colorWhite);
+		}
+
+		// --- IZQDEL (v501) - Blinking ---
+		if (m_izqdel.GetSafeHwnd())
+		{
+			CClientDC dc(&m_izqdel);
+			m_izqdel.GetClientRect(r);
+			dc.FillSolidRect(r, (m_v501 != 0 && m_blinkState) ? colorRed : colorWhite);
+		}
+
+		// --- DERDEL (v502) - Blinking ---
+		if (m_derdel.GetSafeHwnd())
+		{
+			CClientDC dc(&m_derdel);
+			m_derdel.GetClientRect(r);
+			dc.FillSolidRect(r, (m_v502 != 0 && m_blinkState) ? colorRed : colorWhite);
+		}
+
+		// --- DERTRA (v503) - Blinking ---
+		if (m_dertra.GetSafeHwnd())
+		{
+			CClientDC dc(&m_dertra);
+			m_dertra.GetClientRect(r);
+			dc.FillSolidRect(r, (m_v503 != 0 && m_blinkState) ? colorRed : colorWhite);
+		}
+
+		// --- IZQTRA (v504) - Blinking ---
+		if (m_izqtra.GetSafeHwnd())
+		{
+			CClientDC dc(&m_izqtra);
+			m_izqtra.GetClientRect(r);
+			dc.FillSolidRect(r, (m_v504 != 0 && m_blinkState) ? colorRed : colorWhite);
+		}
 	}
 }
 
@@ -200,4 +264,20 @@ void CSlavLightDlg::OnBnClickedStart()
 	m_msg = "Esperando Conexion...";
 
 	UpdateData(false);
+}
+
+void CSlavLightDlg::OnTimer(UINT_PTR nIDEvent)
+{
+	// TODO: Add your message handler code here and/or call default
+	if (nIDEvent == 1)
+	{
+		m_blinkState = !m_blinkState; // Flip the state
+
+		// Only invalidate the indicators to trigger a redraw
+		m_izqdel.Invalidate(FALSE);
+		m_izqtra.Invalidate(FALSE);
+		m_derdel.Invalidate(FALSE);
+		m_dertra.Invalidate(FALSE);
+	}
+	CDialogEx::OnTimer(nIDEvent);
 }

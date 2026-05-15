@@ -3,7 +3,7 @@
 //
 
 #pragma once
-
+#define WM_UPDATE_MODBUS_DATA (WM_USER + 101)
 
 // CSlavLightDlg dialog
 class CSlavLightDlg : public CDialogEx
@@ -20,7 +20,6 @@ public:
 	protected:
 	virtual void DoDataExchange(CDataExchange* pDX);	// DDX/DDV support
 
-
 // Implementation
 protected:
 	HICON m_hIcon;
@@ -28,7 +27,8 @@ protected:
 	// Generated message map functions
 	virtual BOOL OnInitDialog();
 	afx_msg void OnSysCommand(UINT nID, LPARAM lParam);
-	afx_msg void OnPaint();
+	afx_msg LRESULT OnUpdateModbusData(WPARAM wParam, LPARAM lParam);
+	void OnPaint();
 	afx_msg HCURSOR OnQueryDragIcon();
 	DECLARE_MESSAGE_MAP()
 public:
@@ -45,4 +45,6 @@ public:
 	int m_v503;
 	int m_v504;
 	CStatic m_status;
+	bool m_blinkState;
+	afx_msg void OnTimer(UINT_PTR nIDEvent);
 };

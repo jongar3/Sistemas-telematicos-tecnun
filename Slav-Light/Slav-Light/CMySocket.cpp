@@ -53,27 +53,12 @@ static UINT ClientThreadProc(LPVOID pParam)
             1    // Slave ID
         );
 
-        int fren = pDlg->m_v500;
-
-        
-        CDC* pdc = pDlg->m_status.GetDC();
-        CRect r;
-        pDlg->m_status.GetClientRect(r);
-        CBrush red(RGB(255, 0, 0));
-        pdc->SelectStockObject(NULL_PEN);
-        if (fren) { pdc->SelectObject(&red); }
-        else { pdc->SelectStockObject(WHITE_BRUSH); }
-        pdc->Rectangle(r);
-        
-        
 
         if (resLen > 0)
         {
-            client.Send(response, resLen);
+            pDlg->PostMessage(WM_UPDATE_MODBUS_DATA, 0, 0);
 
-            // Because we are in a worker thread, we tell the main 
-            // window to repaint itself to show the updated values.
-            pDlg->Invalidate(FALSE);
+            client.Send(response, resLen);
         }
     }
 
