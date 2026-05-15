@@ -45,8 +45,8 @@ static UINT ClientThreadProc(LPVOID pParam)
 
         int resLen = CModbusSlave::BuildResponse(
             buf, len, response,
-            (pDlg->m_temp != 0),
-            (pDlg->m_rpm != 0),
+            (int)pDlg->m_temp,
+            (int)pDlg->m_rpm,
             1,    // Slave ID
             400   // regBase
         );
