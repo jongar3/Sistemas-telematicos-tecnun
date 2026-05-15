@@ -37,14 +37,14 @@ CModbusClient::~CModbusClient()
     Desconectar();
 }
 
-// Implementación de conexión siguiendo el patrón de TCP_IP.pdf (pág. 14/21) 
+// Implementación de conexión siguiendo el patrón de TCP_IP) 
 BOOL CModbusClient::Conectar(CString ip, int puerto)
 {
     if (m_bConectado) Desconectar();
 
     // 1. Crear el socket 
     if (!m_socket.Create()) {
-        // En una aplicación real de clase, aquí se podría usar MessageBox("Error al crear socket") 
+        //aquí se podría usar MessageBox("Error al crear socket") 
         return FALSE;
     }
 

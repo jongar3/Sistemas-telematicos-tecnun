@@ -1,4 +1,4 @@
-
+ï»¿
 // Master-centralitaDlg.cpp : implementation file
 //
 
@@ -7,6 +7,8 @@
 #include "Master-centralita.h"
 #include "Master-centralitaDlg.h"
 #include "afxdialogex.h"
+#define _USE_MATH_DEFINES
+#include <cmath>
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -42,6 +44,7 @@ CAboutDlg::CAboutDlg() : CDialogEx(IDD_ABOUTBOX)
 void CAboutDlg::DoDataExchange(CDataExchange* pDX)
 {
 	CDialogEx::DoDataExchange(pDX);
+
 }
 
 BEGIN_MESSAGE_MAP(CAboutDlg, CDialogEx)
@@ -93,6 +96,8 @@ void CMastercentralitaDlg::DoDataExchange(CDataExchange* pDX)
 	DDX_Text(pDX, IDC_REV, m_rev);
 	DDX_Text(pDX, IDC_IP_3, m_IP_3);
 	DDX_Text(pDX, IDC_PORT_4, m_port_3);
+	DDX_Control(pDX, IDC_STATIC_temp, m_temp_pic);
+	DDX_Control(pDX, IDC_STATIC_rpm, m_rpm_pic);
 }
 
 BEGIN_MESSAGE_MAP(CMastercentralitaDlg, CDialogEx)
@@ -150,7 +155,7 @@ void CMastercentralitaDlg::actualizarInterfazAccionamientos(short brake, short l
 	m_statusLeft = (left > 0);
 	m_statusRight = (right > 0);
 
-	// Forzamos el repintado de los controles específicos para que salte OnCtlColor
+	// Forzamos el repintado de los controles especÃ­ficos para que salte OnCtlColor
 	GetDlgItem(IDC_LED_ACCIONAMIENTOS)->Invalidate();
 	GetDlgItem(IDC_LED_ACCIONAMIENTOS)->UpdateWindow();
 
@@ -160,10 +165,6 @@ void CMastercentralitaDlg::actualizarInterfazAccionamientos(short brake, short l
 	GetDlgItem(IDC_LED_ACCIONAMIENTOS3)->Invalidate();
 	GetDlgItem(IDC_LED_ACCIONAMIENTOS3)->UpdateWindow();
 }
-
-
-
-
 
 
 
@@ -293,6 +294,72 @@ void CMastercentralitaDlg::OnBnClickedOk()
 	GetDlgItem(IDC_LED_LUCES)->UpdateWindow();
 }
 
+void CMastercentralitaDlg::DibujarTacometro(CStatic& control, int value, int maxValue, COLORREF needleColor)
+{
+	// 1. Safety check and Clamp
+	if (maxValue <= 0) maxValue = 100;
+	value = max(0, min(value, maxValue));
+
+	CRect rect;
+	control.GetClientRect(&rect);
+	CDC* pDC = control.GetDC();
+	if (!pDC) return;
+
+	// --- Double buffer ---
+	CDC memDC;
+	CBitmap bmp;
+	memDC.CreateCompatibleDC(pDC);
+	bmp.CreateCompatibleBitmap(pDC, rect.Width(), rect.Height());
+	CBitmap* pOldBmp = memDC.SelectObject(&bmp);
+
+	memDC.FillSolidRect(&rect, RGB(255, 255, 255));
+
+	// --- Metrics ---
+	int cx = rect.Width() / 2;
+	int cy = rect.Height() - 15;
+	int r = min(cx, cy) - 10;
+
+
+	CPen blackpen(PS_SOLID, 4, RGB(80, 80, 80)); 
+	CPen* pOldPen = memDC.SelectObject(&blackpen);
+	// Draw arc from 180 to 0 degrees
+	memDC.Arc(cx - r, cy - r, cx + r, cy + r,
+		cx + r, cy,   // Start (Right)
+		cx - r, cy);  // End (Left)
+
+	// --- Needle Logic ---
+	// Make sure we use (double) to avoid integer division issues
+	double ratio = (double)value / (double)maxValue;
+	double needleAngle = (180.0 - (ratio * 180.0)) * M_PI / 180.0;
+
+	int tipX = cx + (int)((r - 5) * cos(needleAngle));
+	int tipY = cy - (int)((r - 5) * sin(needleAngle));
+
+	CPen needlePen(PS_SOLID, 3, needleColor);
+	memDC.SelectObject(&needlePen);
+	memDC.MoveTo(cx, cy);
+	memDC.LineTo(tipX, tipY);
+
+	// Center Hub
+	CBrush centerBrush(needleColor);
+	CBrush* pOldBrush = memDC.SelectObject(&centerBrush);
+	memDC.SelectStockObject(NULL_PEN); // No border for the hub
+	memDC.Ellipse(cx - 6, cy - 6, cx + 6, cy + 6);
+
+	// --- Clean up and Swap ---
+	pDC->BitBlt(0, 0, rect.Width(), rect.Height(), &memDC, 0, 0, SRCCOPY);
+
+	memDC.SelectObject(pOldPen);
+	memDC.SelectObject(pOldBrush);
+	memDC.SelectObject(pOldBmp);
+	control.ReleaseDC(pDC);
+}
+
+void CMastercentralitaDlg::ActualizarTacometros()
+{
+	DibujarTacometro(m_temp_pic, m_temp, 200, RGB(255, 0, 0));  // 0â€“200 Â°C, aguja roja
+	DibujarTacometro(m_rpm_pic, m_rev, 7000, RGB(200, 0, 0));  // 0â€“7000 rpm, aguja roja
+}
 
 void CMastercentralitaDlg::OnTimer(UINT_PTR nIDEvent)
 {
@@ -324,13 +391,13 @@ void CMastercentralitaDlg::OnTimer(UINT_PTR nIDEvent)
 		// 504: Intermitente Der Trasero - mismo valor rightVal
 		BOOL w1 = m_modbusLuces.EscribirRegistro(0x01, 500, brakeVal);
 		BOOL w2 = m_modbusLuces.EscribirRegistro(0x01, 501, leftVal);
-		BOOL w3 = m_modbusLuces.EscribirRegistro(0x01, 502, leftVal);
-		BOOL w4 = m_modbusLuces.EscribirRegistro(0x01, 503, rightVal);
+		BOOL w3 = m_modbusLuces.EscribirRegistro(0x01, 503, leftVal);
+		BOOL w4 = m_modbusLuces.EscribirRegistro(0x01, 502, rightVal);
 		BOOL w5 = m_modbusLuces.EscribirRegistro(0x01, 504, rightVal);
 
 		if (res1 && res2 && res3)
 		{
-			// Lógica para actualizar los LEDs en la interfaz
+			// LÃ³gica para actualizar los LEDs en la interfaz
 			// Si el valor es 1 (On), mostramos color o activamos control
 			actualizarInterfazAccionamientos(brakeVal, leftVal, rightVal);
 			CTime time = CTime::GetCurrentTime();
@@ -340,7 +407,7 @@ void CMastercentralitaDlg::OnTimer(UINT_PTR nIDEvent)
 			m_log.SetCurSel(idx);
 
 		}else{
-			// Log de error si falla la comunicación en el timer
+			// Log de error si falla la comunicaciÃ³n en el timer
 			CTime time = CTime::GetCurrentTime();
 			CString strLog;
 			strLog.Format(_T("[%02d:%02d:%02d] Error de lectura en Accionamientos"), time.GetHour(), time.GetMinute(), time.GetSecond());
@@ -353,10 +420,11 @@ void CMastercentralitaDlg::OnTimer(UINT_PTR nIDEvent)
 			m_temp = tempVal * 3;
 			m_rev = revVal * 70;
 			UpdateData(FALSE);  // Vuelca m_temp y m_rev a los controles IDC_TEMP / IDC_REV
+			ActualizarTacometros();
 
 			CTime time2 = CTime::GetCurrentTime();
 			CString strLog2;
-			strLog2.Format(_T("[%02d:%02d:%02d] Motor - Temp=%d°C  Rev=%d rpm"),
+			strLog2.Format(_T("[%02d:%02d:%02d] Motor - Temp=%dÂ°C  Rev=%d rpm"),
 				time2.GetHour(), time2.GetMinute(), time2.GetSecond(),
 				m_temp, m_rev);
 			int idx2 = m_log.AddString(strLog2);
@@ -433,7 +501,7 @@ HBRUSH CMastercentralitaDlg::OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor)
 		}
 		return m_brushGray;
 	}
-	// LED de CONEXIÓN
+	// LED de CONEXIÃ“N
 	if (controlID == IDC_LED_ACCIONAMIENTOS6) {
 		if (m_modbusAccionamientos.EstaConectado()) {
 			pDC->SetBkColor(RGB(0, 255, 0));
@@ -441,7 +509,7 @@ HBRUSH CMastercentralitaDlg::OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor)
 		}
 		return m_brushGray;
 	}
-	// LED de CONEXIÓN Motor
+	// LED de CONEXIÃ“N Motor
 	if (controlID == IDC_LED_ACCIONAMIENTOS7) {
 		if (m_modbusMotor.EstaConectado()) {
 			pDC->SetBkColor(RGB(0, 255, 0));
@@ -449,7 +517,7 @@ HBRUSH CMastercentralitaDlg::OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor)
 		}
 		return m_brushGray;
 	}
-	// LED de CONEXIÓN Luces
+	// LED de CONEXIÃ“N Luces
 	if (controlID == IDC_LED_LUCES) {
 		if (m_modbusLuces.EstaConectado()) {
 			pDC->SetBkColor(RGB(0, 255, 0));
@@ -461,3 +529,6 @@ HBRUSH CMastercentralitaDlg::OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor)
 	// TODO:  Return a different brush if the default is not desired
 	return hbr;
 }
+
+//HILOOO PARA MANDAR LUCES... TODO
+

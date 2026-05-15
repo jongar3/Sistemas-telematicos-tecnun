@@ -1,14 +1,14 @@
 #pragma once
 #include <afxsock.h>
 
-// CModbusClient - Basado en la lógica de conexión de TCP_IP.pdf [cite: 1015]
+// CModbusClient - Basado en la lógica de conexión de TCP_IP
 class CModbusClient
 {
 public:
     CModbusClient();
     virtual ~CModbusClient();
 
-    // Métodos de conexión basados en el ejemplo de Cliente TCP 
+    // Métodos de conexión  
     BOOL Conectar(CString ip, int puerto);
     void Desconectar();
 
@@ -18,7 +18,7 @@ public:
     BOOL EstaConectado() const { return m_bConectado; }
 
 private:
-    CSocket m_socket; // Socket persistente siguiendo el estilo de los ejercicios 
+    CSocket m_socket; // Socket persistente 
     BOOL m_bConectado;
     static WORD m_transactionId;
 

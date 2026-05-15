@@ -57,6 +57,11 @@ public:
 	CStatic m_led2i;
 	CStatic m_led2_d;
 	CStatic m_led2f;
+
+	void DibujarTacometro(CStatic& control, int valor, int maxValor, COLORREF colorAguja);
+	void ActualizarTacometros();
+
+	//static UINT EscribirLucesThread(LPVOID pParam);
 	afx_msg void OnBnClickedOk();
 	int m_pollingMs;
 	afx_msg void OnEnChangePolling();
@@ -68,4 +73,6 @@ public:
 	int m_rev;
 	CString m_IP_3;
 	int m_port_3;
+	CStatic m_temp_pic;
+	CStatic m_rpm_pic;
 };

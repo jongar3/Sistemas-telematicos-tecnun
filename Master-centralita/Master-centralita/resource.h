@@ -29,6 +29,8 @@
 #define IDC_PORT_4                      1014
 #define IDC_LED_ACCIONAMIENTOS8         1015
 #define IDC_LED_LUCES                   1015
+#define IDC_STATIC_temp                 1016
+#define IDC_STATIC_rpm                  1017
 
 // Next default values for new objects
 // 
@@ -36,7 +38,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        130
 #define _APS_NEXT_COMMAND_VALUE         32771
-#define _APS_NEXT_CONTROL_VALUE         1008
+#define _APS_NEXT_CONTROL_VALUE         1018
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif
