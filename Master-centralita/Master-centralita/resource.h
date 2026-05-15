@@ -14,11 +14,17 @@
 #define IDC_LED_ACCIONAMIENTOS2         1003
 #define IDC_LED_ACCIONAMIENTOS3         1004
 #define IDC_LED_ACCIONAMIENTOS4         1005
+#define IDC_TEMP                        1005
 #define IDC_POLLING                     1006
 #define IDC_LIST1                       1007
 #define IDC_LOG                         1007
 #define IDC_LED_ACCIONAMIENTOS5         1008
 #define IDC_LED_ACCIONAMIENTOS6         1008
+#define IDC_IP_1                        1009
+#define IDC_REV                         1010
+#define IDC_PORT_3                      1011
+#define IDC_PORT_1                      1011
+#define IDC_LED_ACCIONAMIENTOS7         1012
 
 // Next default values for new objects
 // 

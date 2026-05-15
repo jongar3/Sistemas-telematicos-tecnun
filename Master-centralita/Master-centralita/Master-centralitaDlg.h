@@ -62,4 +62,8 @@ public:
 	afx_msg void OnEnChangePolling();
 	afx_msg HBRUSH OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor);
 	CListBox m_log;
+	int m_port_1;
+	CString m_ip_1;
+	int m_temp;
+	int m_rev;
 };
