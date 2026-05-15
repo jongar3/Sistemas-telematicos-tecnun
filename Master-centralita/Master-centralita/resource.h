@@ -25,6 +25,10 @@
 #define IDC_PORT_3                      1011
 #define IDC_PORT_1                      1011
 #define IDC_LED_ACCIONAMIENTOS7         1012
+#define IDC_IP_3                        1013
+#define IDC_PORT_4                      1014
+#define IDC_LED_ACCIONAMIENTOS8         1015
+#define IDC_LED_LUCES                   1015
 
 // Next default values for new objects
 // 

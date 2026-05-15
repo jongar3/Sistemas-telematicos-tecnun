@@ -66,4 +66,6 @@ public:
 	CString m_ip_1;
 	int m_temp;
 	int m_rev;
+	CString m_IP_3;
+	int m_port_3;
 };

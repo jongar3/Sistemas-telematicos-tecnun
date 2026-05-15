@@ -62,6 +62,8 @@ CMastercentralitaDlg::CMastercentralitaDlg(CWnd* pParent /*=nullptr*/)
 	, m_ip_1(_T(""))
 	, m_temp(0)
 	, m_rev(0)
+	, m_IP_3(_T(""))
+	, m_port_3(0)
 {
 	m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
 
@@ -89,6 +91,8 @@ void CMastercentralitaDlg::DoDataExchange(CDataExchange* pDX)
 	DDX_Text(pDX, IDC_IP_1, m_ip_1);
 	DDX_Text(pDX, IDC_TEMP, m_temp);
 	DDX_Text(pDX, IDC_REV, m_rev);
+	DDX_Text(pDX, IDC_IP_3, m_IP_3);
+	DDX_Text(pDX, IDC_PORT_4, m_port_3);
 }
 
 BEGIN_MESSAGE_MAP(CMastercentralitaDlg, CDialogEx)
@@ -220,6 +224,7 @@ void CMastercentralitaDlg::OnBnClickedOk()
 	UpdateData(TRUE);
 	BOOL c2 = m_modbusAccionamientos.Conectar(m_ipAccionamientos, m_portAccionamientos);
 	BOOL c1 = m_modbusMotor.Conectar(m_ip_1, m_port_1);
+	BOOL c3 = m_modbusLuces.Conectar(m_IP_3, m_port_3);
 	CTime time = CTime::GetCurrentTime();
 	CString strLog;
 	if (!is_running) {
@@ -247,8 +252,16 @@ void CMastercentralitaDlg::OnBnClickedOk()
 					time.GetHour(), time.GetMinute(), time.GetSecond());
 			}
 			m_log.AddString(strLog);
-			
-			
+			if (c3) {
+				strLog.Format(_T("[%02d:%02d:%02d] Luces conectado en %s:%d"),
+					time.GetHour(), time.GetMinute(), time.GetSecond(),
+					m_IP_3, m_port_3);
+			}
+			else {
+				strLog.Format(_T("[%02d:%02d:%02d] ERROR: No se pudo conectar a Luces"),
+					time.GetHour(), time.GetMinute(), time.GetSecond());
+			}
+			m_log.AddString(strLog);
 			
 			
 			SetTimer(1, m_pollingMs, NULL); // Iniciamos el timer con ID 1
@@ -258,11 +271,26 @@ void CMastercentralitaDlg::OnBnClickedOk()
 	else {
 		KillTimer(1);
 		KillTimer(2);
+
+		m_modbusAccionamientos.Desconectar();
+		m_modbusMotor.Desconectar();
+		m_modbusLuces.Desconectar();
+
+		is_running = false;
+
+		CTime time = CTime::GetCurrentTime();
+		CString strLog;
+		strLog.Format(_T("[%02d:%02d:%02d] Sistema detenido. Conexiones cerradas."),
+			time.GetHour(), time.GetMinute(), time.GetSecond());
+		m_log.AddString(strLog);
+
 	}
 	GetDlgItem(IDC_LED_ACCIONAMIENTOS6)->Invalidate();
 	GetDlgItem(IDC_LED_ACCIONAMIENTOS6)->UpdateWindow();
 	GetDlgItem(IDC_LED_ACCIONAMIENTOS7)->Invalidate();
 	GetDlgItem(IDC_LED_ACCIONAMIENTOS7)->UpdateWindow();
+	GetDlgItem(IDC_LED_LUCES)->Invalidate();
+	GetDlgItem(IDC_LED_LUCES)->UpdateWindow();
 }
 
 
@@ -287,6 +315,18 @@ void CMastercentralitaDlg::OnTimer(UINT_PTR nIDEvent)
 		// Registro 401: Revoluciones (0-100, escalar x70)
 		BOOL resT = m_modbusMotor.LeerRegistro(0x01, 400, tempVal);
 		BOOL resR = m_modbusMotor.LeerRegistro(0x01, 401, revVal);
+
+		// --- LUCES (escritura con valores de Accionamientos) ---
+		// 500: Freno
+		// 501: Intermitente Izq Trasero - mismo valor leftVal
+		// 502: Intermitente Izq Delantero - mismo valor leftVal
+		// 503: Intermitente Der Delantero - mismo valor rightVal
+		// 504: Intermitente Der Trasero - mismo valor rightVal
+		BOOL w1 = m_modbusLuces.EscribirRegistro(0x01, 500, brakeVal);
+		BOOL w2 = m_modbusLuces.EscribirRegistro(0x01, 501, leftVal);
+		BOOL w3 = m_modbusLuces.EscribirRegistro(0x01, 502, leftVal);
+		BOOL w4 = m_modbusLuces.EscribirRegistro(0x01, 503, rightVal);
+		BOOL w5 = m_modbusLuces.EscribirRegistro(0x01, 504, rightVal);
 
 		if (res1 && res2 && res3)
 		{
@@ -331,7 +371,14 @@ void CMastercentralitaDlg::OnTimer(UINT_PTR nIDEvent)
 			int idx2 = m_log.AddString(strLog2);
 			m_log.SetCurSel(idx2);
 		}
-
+		if (!(w1 && w2 && w3 && w4 && w5)) {
+			CTime time3 = CTime::GetCurrentTime();
+			CString strLog3;
+			strLog3.Format(_T("[%02d:%02d:%02d] Error de escritura en Luces"),
+				time3.GetHour(), time3.GetMinute(), time3.GetSecond());
+			int idx3 = m_log.AddString(strLog3);
+			m_log.SetCurSel(idx3);
+		}
 
 	}
 	else if (nIDEvent == 2) // Timer de parpadeo
@@ -346,21 +393,6 @@ void CMastercentralitaDlg::OnTimer(UINT_PTR nIDEvent)
 
 	CDialogEx::OnTimer(nIDEvent);
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 //Mensaje de color ----- ME ENCANTA MFC :)
@@ -412,6 +444,14 @@ HBRUSH CMastercentralitaDlg::OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor)
 	// LED de CONEXIÓN Motor
 	if (controlID == IDC_LED_ACCIONAMIENTOS7) {
 		if (m_modbusMotor.EstaConectado()) {
+			pDC->SetBkColor(RGB(0, 255, 0));
+			return m_brushGreen;
+		}
+		return m_brushGray;
+	}
+	// LED de CONEXIÓN Luces
+	if (controlID == IDC_LED_LUCES) {
+		if (m_modbusLuces.EstaConectado()) {
 			pDC->SetBkColor(RGB(0, 255, 0));
 			return m_brushGreen;
 		}
