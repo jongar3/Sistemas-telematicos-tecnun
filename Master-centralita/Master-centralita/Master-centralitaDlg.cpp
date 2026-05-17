@@ -107,6 +107,7 @@ BEGIN_MESSAGE_MAP(CMastercentralitaDlg, CDialogEx)
 	ON_BN_CLICKED(IDOK, &CMastercentralitaDlg::OnBnClickedOk)
 	ON_WM_CTLCOLOR()
 	ON_WM_TIMER()
+	ON_MESSAGE(WM_POLLING_RESULT, &CMastercentralitaDlg::OnPollingResult)
 END_MESSAGE_MAP()
 
 
@@ -140,7 +141,16 @@ BOOL CMastercentralitaDlg::OnInitDialog()
 	SetIcon(m_hIcon, TRUE);			// Set big icon
 	SetIcon(m_hIcon, FALSE);		// Set small icon
 
-	// TODO: Add extra initialization here
+	// ── Default connection parameters ──────────────────────────
+	m_ip_1 = _T("127.0.0.1");   m_port_1 = 3502;
+	m_ipAccionamientos = _T("127.0.0.1");   m_portAccionamientos = 3503;
+	m_IP_3 = _T("127.0.0.1");   m_port_3 = 3504;
+	m_pollingMs = 500;
+
+	m_bThreadRunning = false;
+	m_pPollingThread = nullptr;
+
+	UpdateData(FALSE);
 
 	return TRUE;  // return TRUE  unless you set the focus to a control
 }
@@ -219,8 +229,7 @@ HCURSOR CMastercentralitaDlg::OnQueryDragIcon()
 }
 
 
-void CMastercentralitaDlg::OnBnClickedOk()
-{
+void CMastercentralitaDlg::OnBnClickedOk() {
 	// TODO: Add your control notification handler code here
 	UpdateData(TRUE);
 	BOOL c2 = m_modbusAccionamientos.Conectar(m_ipAccionamientos, m_portAccionamientos);
@@ -229,69 +238,56 @@ void CMastercentralitaDlg::OnBnClickedOk()
 	CTime time = CTime::GetCurrentTime();
 	CString strLog;
 	if (!is_running) {
-		if (m_pollingMs > 0) {
 
-			is_running = true;
-			//escribimos los logs
-			if (c2) {
-				strLog.Format(_T("[%02d:%02d:%02d] Accionamientos conectado en %s:%d"), time.GetHour(), time.GetMinute(), time.GetSecond(),
-				m_ipAccionamientos, m_portAccionamientos);
-			}
-			else {
-				strLog.Format(_T("[%02d:%02d:%02d] ERROR: No se pudo conectar a Accionamientos"),
-					time.GetHour(), time.GetMinute(), time.GetSecond());
-			}
-			m_log.AddString(strLog);
-			
-			if (c1) {
-				strLog.Format(_T("[%02d:%02d:%02d] Motor conectado en %s:%d"),
-					time.GetHour(), time.GetMinute(), time.GetSecond(),
-					m_ip_1, m_port_1);
-			}
-			else {
-				strLog.Format(_T("[%02d:%02d:%02d] ERROR: No se pudo conectar a Motor"),
-					time.GetHour(), time.GetMinute(), time.GetSecond());
-			}
-			m_log.AddString(strLog);
-			if (c3) {
-				strLog.Format(_T("[%02d:%02d:%02d] Luces conectado en %s:%d"),
-					time.GetHour(), time.GetMinute(), time.GetSecond(),
-					m_IP_3, m_port_3);
-			}
-			else {
-				strLog.Format(_T("[%02d:%02d:%02d] ERROR: No se pudo conectar a Luces"),
-					time.GetHour(), time.GetMinute(), time.GetSecond());
-			}
-			m_log.AddString(strLog);
-			
-			
-			SetTimer(1, m_pollingMs, NULL); // Iniciamos el timer con ID 1
-			SetTimer(2, 500, NULL);           // parpadeo intermitentes ID 2
-		}
+		if (m_pollingMs <= 0) return;
+
+		// Build the parameter block — thread owns and deletes it
+		PollingThreadParam* p = new PollingThreadParam();
+		p->ipAccion = m_ipAccionamientos;  p->portAccion = m_portAccionamientos;
+		p->ipMotor = m_ip_1;              p->portMotor = m_port_1;
+		p->ipLuces = m_IP_3;             p->portLuces = m_port_3;
+		p->pollMs = (DWORD)m_pollingMs;
+		p->hWnd = GetSafeHwnd();
+		p->pRun = &m_bThreadRunning;
+
+		m_bThreadRunning = true;
+		m_pPollingThread = AfxBeginThread(PollingThreadProc, p);
+
+		is_running = true;
+		// parpadeo intermitentes ID 2
+		SetTimer(2, 500, NULL);
+		CTime t = CTime::GetCurrentTime();
+		CString s;
+		s.Format(_T("[%02d:%02d:%02d] Polling thread iniciado"), t.GetHour(), t.GetMinute(), t.GetSecond());
+		m_log.AddString(s);
+
 	}
 	else {
-		KillTimer(1);
+		m_bThreadRunning = false;
+
+		// Wait up to 3 s so the thread can finish its current poll + Sleep
+		if (m_pPollingThread)
+		{
+			WaitForSingleObject(m_pPollingThread->m_hThread, 3000);
+			m_pPollingThread = nullptr;
+		}
+
 		KillTimer(2);
-
-		m_modbusAccionamientos.Desconectar();
-		m_modbusMotor.Desconectar();
-		m_modbusLuces.Desconectar();
-
 		is_running = false;
 
-		CTime time = CTime::GetCurrentTime();
-		CString strLog;
-		strLog.Format(_T("[%02d:%02d:%02d] Sistema detenido. Conexiones cerradas."),
-			time.GetHour(), time.GetMinute(), time.GetSecond());
-		m_log.AddString(strLog);
+		CTime t = CTime::GetCurrentTime();
+		CString s;
+		s.Format(_T("[%02d:%02d:%02d] Sistema detenido."), t.GetHour(), t.GetMinute(), t.GetSecond());
+		m_log.AddString(s);
 
+		// Refresh connection LEDs
+		GetDlgItem(IDC_LED_ACCIONAMIENTOS6)->Invalidate();
+		GetDlgItem(IDC_LED_ACCIONAMIENTOS6)->UpdateWindow();
+		GetDlgItem(IDC_LED_ACCIONAMIENTOS7)->Invalidate();
+		GetDlgItem(IDC_LED_ACCIONAMIENTOS7)->UpdateWindow();
+		GetDlgItem(IDC_LED_LUCES)->Invalidate();
+		GetDlgItem(IDC_LED_LUCES)->UpdateWindow();
 	}
-	GetDlgItem(IDC_LED_ACCIONAMIENTOS6)->Invalidate();
-	GetDlgItem(IDC_LED_ACCIONAMIENTOS6)->UpdateWindow();
-	GetDlgItem(IDC_LED_ACCIONAMIENTOS7)->Invalidate();
-	GetDlgItem(IDC_LED_ACCIONAMIENTOS7)->UpdateWindow();
-	GetDlgItem(IDC_LED_LUCES)->Invalidate();
-	GetDlgItem(IDC_LED_LUCES)->UpdateWindow();
 }
 
 void CMastercentralitaDlg::DibujarTacometro(CStatic& control, int value, int maxValue, COLORREF needleColor)
@@ -363,91 +359,10 @@ void CMastercentralitaDlg::ActualizarTacometros()
 
 void CMastercentralitaDlg::OnTimer(UINT_PTR nIDEvent)
 {
+		
 	if (nIDEvent == 1) // Si es nuestro timer de polling
 	{
-		
-		//---------------ACCIONAMIENTOS-------------
-		short brakeVal = 0, leftVal = 0, rightVal = 0;
-
-		// Leemos los 3 registros definidos en el PDF para Accionamientos
-		// Registro 400: Freno
-		// Registro 401: Intermitente Izquierdo
-		// Registro 402: Intermitente Derecho
-		BOOL res1 = m_modbusAccionamientos.LeerRegistro(0x01, 400, brakeVal);
-		BOOL res2 = m_modbusAccionamientos.LeerRegistro(0x01, 401, leftVal);
-		BOOL res3 = m_modbusAccionamientos.LeerRegistro(0x01, 402, rightVal);
-		//-------------MOTOR--------------------
-		short tempVal = 0, revVal = 0;
-		// Registro 400: Temperatura (0-100, escalar x3)
-		// Registro 401: Revoluciones (0-100, escalar x70)
-		BOOL resT = m_modbusMotor.LeerRegistro(0x01, 400, tempVal);
-		BOOL resR = m_modbusMotor.LeerRegistro(0x01, 401, revVal);
-
-		// --- LUCES (escritura con valores de Accionamientos) ---
-		// 500: Freno
-		// 501: Intermitente Izq Trasero - mismo valor leftVal
-		// 502: Intermitente Izq Delantero - mismo valor leftVal
-		// 503: Intermitente Der Delantero - mismo valor rightVal
-		// 504: Intermitente Der Trasero - mismo valor rightVal
-		BOOL w1 = m_modbusLuces.EscribirRegistro(0x01, 500, brakeVal);
-		BOOL w2 = m_modbusLuces.EscribirRegistro(0x01, 501, leftVal);
-		BOOL w3 = m_modbusLuces.EscribirRegistro(0x01, 503, leftVal);
-		BOOL w4 = m_modbusLuces.EscribirRegistro(0x01, 502, rightVal);
-		BOOL w5 = m_modbusLuces.EscribirRegistro(0x01, 504, rightVal);
-
-		if (res1 && res2 && res3)
-		{
-			// Lógica para actualizar los LEDs en la interfaz
-			// Si el valor es 1 (On), mostramos color o activamos control
-			actualizarInterfazAccionamientos(brakeVal, leftVal, rightVal);
-			CTime time = CTime::GetCurrentTime();
-			CString strLog;
-			strLog.Format(_T("[%02d:%02d:%02d] Brake=%d  Left=%d  Right=%d"), time.GetHour(), time.GetMinute(), time.GetSecond(), brakeVal, leftVal, rightVal);
-			int idx = m_log.AddString(strLog);
-			m_log.SetCurSel(idx);
-
-		}else{
-			// Log de error si falla la comunicación en el timer
-			CTime time = CTime::GetCurrentTime();
-			CString strLog;
-			strLog.Format(_T("[%02d:%02d:%02d] Error de lectura en Accionamientos"), time.GetHour(), time.GetMinute(), time.GetSecond());
-			int idx = m_log.AddString(strLog);
-			m_log.SetCurSel(idx);
-		}
-
-		if (resT && resR)
-		{
-			m_temp = tempVal * 3;
-			m_rev = revVal * 70;
-			UpdateData(FALSE);  // Vuelca m_temp y m_rev a los controles IDC_TEMP / IDC_REV
-			ActualizarTacometros();
-
-			CTime time2 = CTime::GetCurrentTime();
-			CString strLog2;
-			strLog2.Format(_T("[%02d:%02d:%02d] Motor - Temp=%d°C  Rev=%d rpm"),
-				time2.GetHour(), time2.GetMinute(), time2.GetSecond(),
-				m_temp, m_rev);
-			int idx2 = m_log.AddString(strLog2);
-			m_log.SetCurSel(idx2);
-		}
-		else
-		{
-			CTime time2 = CTime::GetCurrentTime();
-			CString strLog2;
-			strLog2.Format(_T("[%02d:%02d:%02d] Error de lectura en Motor"),
-				time2.GetHour(), time2.GetMinute(), time2.GetSecond());
-			int idx2 = m_log.AddString(strLog2);
-			m_log.SetCurSel(idx2);
-		}
-		if (!(w1 && w2 && w3 && w4 && w5)) {
-			CTime time3 = CTime::GetCurrentTime();
-			CString strLog3;
-			strLog3.Format(_T("[%02d:%02d:%02d] Error de escritura en Luces"),
-				time3.GetHour(), time3.GetMinute(), time3.GetSecond());
-			int idx3 = m_log.AddString(strLog3);
-			m_log.SetCurSel(idx3);
-		}
-
+	//YA NO SE USA ON TIMER PARA POLLING
 	}
 	else if (nIDEvent == 2) // Timer de parpadeo
 	{
@@ -530,5 +445,114 @@ HBRUSH CMastercentralitaDlg::OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor)
 	return hbr;
 }
 
-//HILOOO PARA MANDAR LUCES... TODO
+//HILOOO PARA comunicar SIN BLOQUEAR
 
+UINT CMastercentralitaDlg::PollingThreadProc(LPVOID pParam)
+{
+	PollingThreadParam* p = (PollingThreadParam*)pParam;
+
+	// Local clients — created here, live here, die here
+	CModbusClient clientAccion, clientMotor, clientLuces;
+
+	clientAccion.Conectar(p->ipAccion, p->portAccion);
+	clientMotor.Conectar(p->ipMotor, p->portMotor);
+	clientLuces.Conectar(p->ipLuces, p->portLuces);
+
+	HWND hWnd = p->hWnd;
+	DWORD pollMs = p->pollMs;
+	volatile bool* pRun = p->pRun;
+	delete p;  
+
+	while (*pRun)
+	{
+		PollingResult* pRes = new PollingResult();
+		pRes->brakeVal = pRes->leftVal = pRes->rightVal = 0;
+		pRes->tempVal = pRes->revVal = 0;
+
+		// ── Read Accionamientos ───────────────────────────────
+		pRes->accionOk =
+			clientAccion.LeerRegistro(0x01, 400, pRes->brakeVal) &&
+			clientAccion.LeerRegistro(0x01, 401, pRes->leftVal) &&
+			clientAccion.LeerRegistro(0x01, 402, pRes->rightVal);
+
+		// ── Read Motor ────────────────────────────────────────
+		pRes->motorOk =
+			clientMotor.LeerRegistro(0x01, 400, pRes->tempVal) &&
+			clientMotor.LeerRegistro(0x01, 401, pRes->revVal);
+
+		// ── Write Luces (only if we have valid accion data) ───
+		pRes->lucesOk = FALSE;
+		if (pRes->accionOk)
+		{
+			pRes->lucesOk =
+				clientLuces.EscribirRegistro(0x01, 500, pRes->brakeVal) &&
+				clientLuces.EscribirRegistro(0x01, 501, pRes->leftVal) &&
+				clientLuces.EscribirRegistro(0x01, 503, pRes->leftVal) &&
+				clientLuces.EscribirRegistro(0x01, 502, pRes->rightVal) &&
+				clientLuces.EscribirRegistro(0x01, 504, pRes->rightVal);
+		}
+
+		// ── Send result to UI thread — non-blocking ───────────
+		// pRes is heap-allocated; OnPollingResult deletes it.
+		::PostMessage(hWnd, WM_POLLING_RESULT, 0, (LPARAM)pRes);
+		Sleep(pollMs);
+	}
+
+	clientAccion.Desconectar();
+	clientMotor.Desconectar();
+	clientLuces.Desconectar();
+
+	return 0;
+}
+
+// ── UI thread receives result, updates controls — never blocks ────────────────
+LRESULT CMastercentralitaDlg::OnPollingResult(WPARAM /*wParam*/, LPARAM lParam)
+{
+	PollingResult* pRes = reinterpret_cast<PollingResult*>(lParam);
+	if (!pRes) return 0;
+
+	CTime t = CTime::GetCurrentTime();
+	CString s;
+
+	if (pRes->accionOk)
+	{
+		actualizarInterfazAccionamientos(pRes->brakeVal, pRes->leftVal, pRes->rightVal);
+		s.Format(_T("[%02d:%02d:%02d] Brake=%d  Left=%d  Right=%d"),
+			t.GetHour(), t.GetMinute(), t.GetSecond(),
+			pRes->brakeVal, pRes->leftVal, pRes->rightVal);
+		m_log.SetCurSel(m_log.AddString(s));
+	}
+	else
+	{
+		s.Format(_T("[%02d:%02d:%02d] Error lectura Accionamientos"),
+			t.GetHour(), t.GetMinute(), t.GetSecond());
+		m_log.AddString(s);
+	}
+
+	if (pRes->motorOk)
+	{
+		m_temp = pRes->tempVal * 3;
+		m_rev = pRes->revVal * 70;
+		UpdateData(FALSE);
+		ActualizarTacometros();
+		s.Format(_T("[%02d:%02d:%02d] Motor - Temp=%d°C  Rev=%d rpm"),
+			t.GetHour(), t.GetMinute(), t.GetSecond(), m_temp, m_rev);
+		m_log.SetCurSel(m_log.AddString(s));
+	}
+	else
+	{
+		s.Format(_T("[%02d:%02d:%02d] Error lectura Motor"),
+			t.GetHour(), t.GetMinute(), t.GetSecond());
+		m_log.AddString(s);
+	}
+
+	if (pRes->accionOk && !pRes->lucesOk)
+	{
+		s.Format(_T("[%02d:%02d:%02d] Error escritura Luces"),
+			t.GetHour(), t.GetMinute(), t.GetSecond());
+		m_log.AddString(s);
+	}
+
+	delete pRes;   
+	return 0;
+}

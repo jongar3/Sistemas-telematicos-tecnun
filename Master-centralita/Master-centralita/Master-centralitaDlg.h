@@ -5,6 +5,26 @@
 #pragma once
 #include "ModbusClient.h"
 
+
+//THREAD(S) + data structures
+#define WM_POLLING_RESULT (WM_USER + 200)
+
+struct PollingResult
+{
+	short  brakeVal, leftVal, rightVal;
+	short  tempVal, revVal;
+	BOOL   accionOk, motorOk, lucesOk;
+};
+struct PollingThreadParam
+{
+	CString  ipAccion;    int portAccion;
+	CString  ipMotor;     int portMotor;
+	CString  ipLuces;     int portLuces;
+	DWORD    pollMs;
+	HWND     hWnd;        // PostMessage target
+	volatile bool* pRun;  // thread reads this; UI sets it false to stop
+};
+
 // CMastercentralitaDlg dialog
 class CMastercentralitaDlg : public CDialogEx
 {
@@ -46,6 +66,8 @@ protected:
 	afx_msg void OnPaint();
 	afx_msg HCURSOR OnQueryDragIcon();
 	afx_msg void OnTimer(UINT_PTR nIDEvent);
+	afx_msg LRESULT OnPollingResult(WPARAM wParam, LPARAM lParam);
+	
 	DECLARE_MESSAGE_MAP()
 public:
 	bool m_blinkState;      // true=encendido, false=apagado para intermitentes
@@ -75,4 +97,10 @@ public:
 	int m_port_3;
 	CStatic m_temp_pic;
 	CStatic m_rpm_pic;
+private:
+	
+	CWinThread* m_pPollingThread;
+	volatile bool m_bThreadRunning;
+
+	static UINT PollingThreadProc(LPVOID pParam);
 };
