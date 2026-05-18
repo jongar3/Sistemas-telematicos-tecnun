@@ -117,6 +117,7 @@ BOOL CEsclavoAccionamientoDlg::OnInitDialog()
 	m_port = 3503;
 
 	m_msg = "Socket sin crear";
+	m_bRunning = false;
 
 	UpdateData(false);
 
@@ -175,24 +176,39 @@ HCURSOR CEsclavoAccionamientoDlg::OnQueryDragIcon()
 
 void CEsclavoAccionamientoDlg::OnBnClickedStart()
 {
-	// TODO: Add your control notification handler code here
 
-	UpdateData(true);
+	if (m_bRunning == false) {
 
-	CMySocket* misoc;
-	misoc = new CMySocket(this);
-	int puerto = (int)m_port;
-	bool ret = misoc->Create(puerto, SOCK_STREAM);
-	
-	if (!ret) MessageBox("Error al crear el socket");
-	
-	ret = misoc->Listen();
-	
-	if (!ret) MessageBox("Error al quedar a la escucha...");
-	
-	m_msg = "Esperando Conexion...";
-	
-	UpdateData(false);
+		UpdateData(true);
+		int puerto = (int)m_port;
+
+		misoc = new CMySocket(this);
+
+
+		if (!misoc->Create(puerto, SOCK_STREAM)) {
+			MessageBox("Error al crear el socket");
+		}
+
+		if (!misoc->Listen()) {
+			MessageBox("Error al quedar a la escucha");
+		}
+
+		m_bRunning = true;
+
+		SetDlgItemText(IDC_MSG, "Esperando Conexion...");
+
+
+	}
+	else if (m_bRunning) {
+		
+		misoc->m_bStop = true;
+		misoc->Close();
+		delete misoc;
+		misoc = nullptr;
+
+		m_bRunning = false;
+		SetDlgItemText(IDC_MSG, "Socket Detenido...");
+	}
 	
 
 }

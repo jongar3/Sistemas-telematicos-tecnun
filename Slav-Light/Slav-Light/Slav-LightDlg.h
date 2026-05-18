@@ -30,6 +30,7 @@ protected:
 	virtual BOOL OnInitDialog();
 	afx_msg void OnSysCommand(UINT nID, LPARAM lParam);
 	afx_msg LRESULT OnUpdateModbusData(WPARAM wParam, LPARAM lParam);
+	afx_msg HBRUSH OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor);
 	void OnPaint();
 	afx_msg HCURSOR OnQueryDragIcon();
 	DECLARE_MESSAGE_MAP()
@@ -50,5 +51,10 @@ public:
 	bool m_blinkState;
 	afx_msg void OnTimer(UINT_PTR nIDEvent);
 	bool m_bRunning;
+private:
+	void UpdateIndicator(CStatic& ctrl, bool active, bool blink);
+	CBrush m_brushRed;
+	CBrush m_brushYellow;
+	CBrush m_brushWhite;
 	
 };

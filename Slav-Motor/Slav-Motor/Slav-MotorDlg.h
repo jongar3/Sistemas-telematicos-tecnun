@@ -3,6 +3,7 @@
 //
 
 #pragma once
+class CMySocket;
 
 
 // CSlavMotorDlg dialog
@@ -24,6 +25,7 @@ public:
 // Implementation
 protected:
 	HICON m_hIcon;
+	CMySocket* misoc;
 
 	// Generated message map functions
 	virtual BOOL OnInitDialog();
@@ -35,6 +37,7 @@ public:
 	int m_port;
 	int m_temp;
 	int m_rpm;
+	bool m_bRunning;
 	afx_msg void OnBnClickedStart();
 	afx_msg void OnReleasedcaptureTemp(NMHDR* pNMHDR, LRESULT* pResult);
 	afx_msg void OnReleasedcaptureRpm(NMHDR* pNMHDR, LRESULT* pResult);

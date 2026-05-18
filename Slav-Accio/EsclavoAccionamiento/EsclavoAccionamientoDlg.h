@@ -3,7 +3,9 @@
 //
 
 #pragma once
-#include "CMySocket.h"
+
+class CMySocket;
+
 
 // CEsclavoAccionamientoDlg dialog
 class CEsclavoAccionamientoDlg : public CDialogEx
@@ -31,6 +33,8 @@ protected:
 	afx_msg void OnPaint();
 	afx_msg HCURSOR OnQueryDragIcon();
 	DECLARE_MESSAGE_MAP()
+	CMySocket* misoc;
+
 public:
 	int m_port;
 	afx_msg void OnBnClickedStart();
@@ -41,4 +45,6 @@ public:
 	afx_msg void OnBnClickedFreno();
 	afx_msg void OnBnClickedIzq();
 	afx_msg void OnBnClickedDer();
+	bool m_bRunning;
+
 };

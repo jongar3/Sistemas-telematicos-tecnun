@@ -14,7 +14,7 @@ class CModbusSlave {
 public:
     static int BuildResponse(
         unsigned char* inBuf, int inLen, unsigned char* outBuf,
-        int& v500, int& v501, int& v502, int& v503, int& v504, // Passed by reference        unsigned char myID = 1,
+        int& v500, int& v501, int& v502, int& v503, int& v504, // Passed by reference unsigned char myID = 1,
         unsigned short regBase = 0)
     {
         if (inLen < 12) return 0;

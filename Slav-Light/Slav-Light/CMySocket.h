@@ -14,8 +14,10 @@ class CMySocket :
     CSlavLightDlg* pDlg;
 
 public:
+    volatile bool m_bStop;
+    CMySocket(CSlavLightDlg* pDlg) : pDlg(pDlg), m_bStop(false) {}
 
-    CMySocket(CSlavLightDlg* pD) { pDlg = pD; }
+    //CMySocket(CSlavLightDlg* pD) { pDlg = pD; }
     virtual void OnAccept(int err);
 
 };

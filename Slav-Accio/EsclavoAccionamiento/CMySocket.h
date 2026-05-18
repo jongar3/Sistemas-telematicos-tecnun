@@ -14,8 +14,9 @@ class CMySocket :
     CEsclavoAccionamientoDlg *pDlg;
 
 public:
+    volatile bool m_bStop;
 
-    CMySocket(CEsclavoAccionamientoDlg* pD) { pDlg = pD; }
+    CMySocket(CEsclavoAccionamientoDlg* pDlg) : pDlg(pDlg), m_bStop(false) {}
     virtual void OnAccept(int err);
 
 };

@@ -14,8 +14,9 @@ class CMySocket :
     CSlavMotorDlg* pDlg;
 
 public:
+    volatile bool m_bStop;
 
-    CMySocket(CSlavMotorDlg* pD) { pDlg = pD; }
+    CMySocket(CSlavMotorDlg* pDlg) : pDlg(pDlg), m_bStop(false) {}
     virtual void OnAccept(int err);
 
 };

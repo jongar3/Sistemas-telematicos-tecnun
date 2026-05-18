@@ -57,6 +57,7 @@ CSlavMotorDlg::CSlavMotorDlg(CWnd* pParent /*=nullptr*/)
 	, m_temp(0)
 	, m_rpm(0)
 	, m_msg(_T(""))
+	, m_bRunning(false)
 {
 	m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
 }
@@ -113,9 +114,10 @@ BOOL CSlavMotorDlg::OnInitDialog()
 
 	// TODO: Add extra initialization here
 
-	m_port = 3503;
+	m_port = 3502;
 
 	m_msg = "Socket sin crear";
+	m_bRunning = false;
 
 	UpdateData(false);
 
@@ -174,23 +176,38 @@ HCURSOR CSlavMotorDlg::OnQueryDragIcon()
 
 void CSlavMotorDlg::OnBnClickedStart()
 {
-	// TODO: Add your control notification handler code here
-	UpdateData(true);
 
-	CMySocket* misoc;
-	misoc = new CMySocket(this);
-	int puerto = (int)m_port;
-	bool ret = misoc->Create(puerto, SOCK_STREAM);
+	if (m_bRunning == false) {
 
-	if (!ret) MessageBox("Error al crear el socket");
+		UpdateData(true);
+		int puerto = (int)m_port;
 
-	ret = misoc->Listen();
+		misoc = new CMySocket(this);
 
-	if (!ret) MessageBox("Error al quedar a la escucha...");
 
-	m_msg = "Esperando Conexion...";
+		if (!misoc->Create(puerto, SOCK_STREAM)) {
+			MessageBox("Error al crear el socket");
+		}
 
-	UpdateData(false);
+		if (!misoc->Listen()) {
+			MessageBox("Error al quedar a la escucha");
+		}
+
+		m_bRunning = true;
+
+		SetDlgItemText(IDC_MSG, "Esperando Conexion...");
+
+	}
+	else if (m_bRunning) {
+		
+		misoc->m_bStop = true;
+		misoc->Close();
+		delete misoc;
+		misoc = nullptr;
+
+		m_bRunning = false;
+		SetDlgItemText(IDC_MSG, "Socket Detenido...");
+	}
 }
 
 void CSlavMotorDlg::OnReleasedcaptureTemp(NMHDR* pNMHDR, LRESULT* pResult)

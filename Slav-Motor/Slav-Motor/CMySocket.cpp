@@ -6,6 +6,7 @@
 struct ClientContext {
     SOCKET rawSocket;
     CSlavMotorDlg* pDlg;
+    volatile bool* pStop;
 };
 
 static UINT ClientThreadProc(LPVOID pParam)
@@ -13,13 +14,13 @@ static UINT ClientThreadProc(LPVOID pParam)
     ClientContext* ctx = (ClientContext*)pParam;
     CSlavMotorDlg* pDlg = ctx->pDlg;
     SOCKET rawSock = ctx->rawSocket;  // save before delete
+    volatile bool* pStop = ctx->pStop;
+
     delete ctx;
 
-    // Re-attach the socket in this new thread (MFC requirement)
     CSocket client;
     client.Attach(rawSock);
 
-    // ── Your original working logic, untouched ──────────────────
     CString cs, cs1;
     UINT port;
     client.GetSockName(cs, port);
@@ -29,7 +30,7 @@ static UINT ClientThreadProc(LPVOID pParam)
     unsigned char buf[300];
     unsigned char response[300];
 
-    while (true)
+    while (!(*pStop))
     {
         int len = client.Receive(buf, sizeof(buf));
 
@@ -57,7 +58,6 @@ static UINT ClientThreadProc(LPVOID pParam)
 
     client.Close();
     pDlg->SetDlgItemText(IDC_MSG, "Conex. Terminada");
-    // ── End of original logic ───────────────────────────────────
 
     return 0;
 }
@@ -77,7 +77,7 @@ void CMySocket::OnAccept(int err)
     ClientContext* ctx = new ClientContext();
     ctx->rawSocket = tempClient.Detach();
     ctx->pDlg = pDlg;
+    ctx->pStop = &m_bStop;
 
     AfxBeginThread(ClientThreadProc, ctx);
-    // OnAccept returns immediately — UI stays responsive
 }
