@@ -6,6 +6,7 @@
 #include "framework.h"
 #include "Slav-Light.h"
 #include "Slav-LightDlg.h"
+#include "CMySocket.h"
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
