@@ -5,6 +5,8 @@
 #pragma once
 #define WM_UPDATE_MODBUS_DATA (WM_USER + 101)
 
+class CMySocket;
+
 // CSlavLightDlg dialog
 class CSlavLightDlg : public CDialogEx
 {
@@ -23,7 +25,7 @@ public:
 // Implementation
 protected:
 	HICON m_hIcon;
-
+	CMySocket* misoc;
 	// Generated message map functions
 	virtual BOOL OnInitDialog();
 	afx_msg void OnSysCommand(UINT nID, LPARAM lParam);
@@ -47,4 +49,6 @@ public:
 	CStatic m_status;
 	bool m_blinkState;
 	afx_msg void OnTimer(UINT_PTR nIDEvent);
+	bool m_bRunning;
+	
 };
