@@ -1,10 +1,10 @@
 # Sistemas Telemáticos — TECNUN
 
-Solución al proyecto final de la asignatura de Sistemas Telemáticos, hecho en MFC porque somos vintage.
+Solución al proyecto final de la asignatura de Sistemas Telemáticos Tecnun 2026, hecho en MFC porque somos vintage.
 
 Lo dejamos aquí por si a alguien le resulta útil.
 
-El proyecto implementa un sistema de monitorización industrial basado en el protocolo **Modbus TCP/IP**, con arquitectura maestro-esclavo. Un maestro (la centralita) se comunica con tres esclavos que simulan subsistemas reales de un coche (creo): motor, accionamientos y luces.
+El proyecto implementa un sistema de monitorización industrial basado en el protocolo **Modbus TCP/IP**, con arquitectura maestro-esclavo. Un maestro (la centralita) se comunica con tres esclavos que simulan subsistemas reales de un coche (creo): motor, accionamientos y luces. 
 
 ## Arquitectura
 
@@ -38,12 +38,14 @@ Los esclavos tienen sus propias ventanas de configuración: el de motor expone s
 ## Tecnologías
 
 - **C/C++** — lógica principal de maestros y esclavos (~97% del código)
-- **MFC (Microsoft Foundation Classes)** — para la interfaz gráfica. [Llaman de los 90s quieres su Framework de vuelta.](https://youtu.be/zZ5Yaowmm1A?si=7Z63pzitZsFZxYcr&t=78). 🥵
+- **MFC (Microsoft Foundation Classes)** — para la interfaz gráfica. [Llaman de los 90s quieren su Framework de vuelta.](https://youtu.be/zZ5Yaowmm1A?si=7Z63pzitZsFZxYcr&t=78). 🥵
 - **Python + pymodbus** — servidor de pruebas para simular los esclavos ***OPCIONAL***
 
 ## Web server 
 
-La centralita incluye un servidor HTTP embebido en `localhost:8082` que sirve una página con auto-refresh cada segundo. Muestra el estado de los tres esclavos (temperatura, rpm, accionamientos y estado de conexión) con un dashboard en HTML/CSS. El dashboard se sirve mediante la sofisticada técnica de concatenar etiquetas HTML a mano dentro de un `CString`. Porque, ¿quién usaría frameworks modernos de servidor o un motor de plantillas en pleno 2026?
+La centralita incluye un servidor HTTP embebido en `localhost:8082` que sirve una página con auto-refresh cada segundo. Muestra el estado de los tres esclavos (temperatura, rpm, accionamientos y estado de conexión) con un dashboard en HTML/CSS. 
+
+El dashboard se sirve mediante la sofisticada técnica de concatenar etiquetas HTML a mano dentro de un `CString`. Porque, ¿quién usaría frameworks modernos de servidor o un motor de plantillas HTML en pleno 2026?
 
 ## Cómo probar sin los esclavo ***OPCIONAL***
 
@@ -60,7 +62,7 @@ Esto arranca tres servidores Modbus en localhost (puertos 3502, 3503 y 3504) con
 
 Proyecto académico. El código cumple su función, que era aprobar (espero). 
 
-Cuidado con los offsets de registros Modbus (pymodbus tiene un desplazamiento +1 que da más de un dolor de cabeza).
+Cuidado con los offsets de registros Modbus (pymodbus tiene un desplazamiento +1 que puede dar más de un dolor de cabeza).
 
 ---
 
