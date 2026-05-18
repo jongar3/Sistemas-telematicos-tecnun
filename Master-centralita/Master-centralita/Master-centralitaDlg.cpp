@@ -17,7 +17,13 @@
 
 // CAboutDlg dialog used for App About
 bool is_running = false;
-
+volatile bool g_brake = false;
+volatile bool g_left = false;
+volatile bool g_right = false;
+volatile bool g_dataReady = false;
+volatile bool g_connAccion = false;
+volatile bool g_connMotor = false;
+volatile bool g_connLuces = false;
 
 class CAboutDlg : public CDialogEx
 {
@@ -108,6 +114,7 @@ BEGIN_MESSAGE_MAP(CMastercentralitaDlg, CDialogEx)
 	ON_WM_CTLCOLOR()
 	ON_WM_TIMER()
 	ON_MESSAGE(WM_POLLING_RESULT, &CMastercentralitaDlg::OnPollingResult)
+	ON_MESSAGE(WM_CONN_CHANGED, &CMastercentralitaDlg::OnConnChanged)
 END_MESSAGE_MAP()
 
 
@@ -148,9 +155,21 @@ BOOL CMastercentralitaDlg::OnInitDialog()
 	m_pollingMs = 500;
 
 	m_bThreadRunning = false;
-	m_pPollingThread = nullptr;
+	m_pReadThread = nullptr;
+	m_pWriteThread = nullptr;
 
 	UpdateData(FALSE);
+
+	// ── Web server en puerto 8080 ──────────────────────
+	if (m_webSocket.Create(8080, SOCK_STREAM))
+	{
+		m_webSocket.Listen();
+		m_log.AddString(_T("Web server escuchando en http://127.0.0.1:8080"));
+	}
+	else
+	{
+		m_log.AddString(_T("ERROR: no se pudo arrancar el web server"));
+	}
 
 	return TRUE;  // return TRUE  unless you set the focus to a control
 }
@@ -232,26 +251,36 @@ HCURSOR CMastercentralitaDlg::OnQueryDragIcon()
 void CMastercentralitaDlg::OnBnClickedOk() {
 	// TODO: Add your control notification handler code here
 	UpdateData(TRUE);
-	BOOL c2 = m_modbusAccionamientos.Conectar(m_ipAccionamientos, m_portAccionamientos);
-	BOOL c1 = m_modbusMotor.Conectar(m_ip_1, m_port_1);
-	BOOL c3 = m_modbusLuces.Conectar(m_IP_3, m_port_3);
+
 	CTime time = CTime::GetCurrentTime();
 	CString strLog;
 	if (!is_running) {
 
 		if (m_pollingMs <= 0) return;
 
-		// Build the parameter block — thread owns and deletes it
-		PollingThreadParam* p = new PollingThreadParam();
-		p->ipAccion = m_ipAccionamientos;  p->portAccion = m_portAccionamientos;
-		p->ipMotor = m_ip_1;              p->portMotor = m_port_1;
-		p->ipLuces = m_IP_3;             p->portLuces = m_port_3;
-		p->pollMs = (DWORD)m_pollingMs;
-		p->hWnd = GetSafeHwnd();
-		p->pRun = &m_bThreadRunning;
+		// Hilo de LECTURA
+		ReadThreadParam* pR = new ReadThreadParam();
+		pR->ipAccion = m_ipAccionamientos;  pR->portAccion = m_portAccionamientos;
+		pR->ipMotor = m_ip_1;             pR->portMotor = m_port_1;
+		pR->pollMs = (DWORD)m_pollingMs;
+		pR->hWnd = GetSafeHwnd();
+		pR->pRun = &m_bThreadRunning;
 
+		// Hilo de ESCRITURA
+		WriteThreadParam* pW = new WriteThreadParam();
+		pW->ipLuces = m_IP_3;  pW->portLuces = m_port_3;
+		pW->pollMs = (DWORD)m_pollingMs;
+		pW->hWnd = GetSafeHwnd();
+		pW->pRun = &m_bThreadRunning;
+
+		g_connAccion = false;
+		g_connMotor = false;
+		g_connLuces = false;
+		g_dataReady = false;  // reset por si se relanza
 		m_bThreadRunning = true;
-		m_pPollingThread = AfxBeginThread(PollingThreadProc, p);
+
+		m_pReadThread = AfxBeginThread(ReadThreadProc, pR);
+		m_pWriteThread = AfxBeginThread(WriteThreadProc, pW);
 
 		is_running = true;
 		// parpadeo intermitentes ID 2
@@ -266,10 +295,15 @@ void CMastercentralitaDlg::OnBnClickedOk() {
 		m_bThreadRunning = false;
 
 		// Wait up to 3 s so the thread can finish its current poll + Sleep
-		if (m_pPollingThread)
+		if (m_pReadThread)
 		{
-			WaitForSingleObject(m_pPollingThread->m_hThread, 3000);
-			m_pPollingThread = nullptr;
+			WaitForSingleObject(m_pReadThread->m_hThread, 3000);
+			m_pReadThread = nullptr;
+		}
+		if (m_pWriteThread)
+		{
+			WaitForSingleObject(m_pWriteThread->m_hThread, 3000);
+			m_pWriteThread = nullptr;
 		}
 
 		KillTimer(2);
@@ -353,8 +387,8 @@ void CMastercentralitaDlg::DibujarTacometro(CStatic& control, int value, int max
 
 void CMastercentralitaDlg::ActualizarTacometros()
 {
-	DibujarTacometro(m_temp_pic, m_temp, 200, RGB(255, 0, 0));  // 0–200 °C, aguja roja
-	DibujarTacometro(m_rpm_pic, m_rev, 7000, RGB(200, 0, 0));  // 0–7000 rpm, aguja roja
+	DibujarTacometro(m_temp_pic, m_temp, 300, RGB(255, 0, 0));  // 0–300 °C, aguja roja
+	DibujarTacometro(m_rpm_pic, m_rev, 7000, RGB(255, 0, 0));  // 0–7000 rpm, aguja roja
 }
 
 void CMastercentralitaDlg::OnTimer(UINT_PTR nIDEvent)
@@ -418,7 +452,7 @@ HBRUSH CMastercentralitaDlg::OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor)
 	}
 	// LED de CONEXIÓN
 	if (controlID == IDC_LED_ACCIONAMIENTOS6) {
-		if (m_modbusAccionamientos.EstaConectado()) {
+		if (g_connAccion) {
 			pDC->SetBkColor(RGB(0, 255, 0));
 			return m_brushGreen;
 		}
@@ -426,7 +460,7 @@ HBRUSH CMastercentralitaDlg::OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor)
 	}
 	// LED de CONEXIÓN Motor
 	if (controlID == IDC_LED_ACCIONAMIENTOS7) {
-		if (m_modbusMotor.EstaConectado()) {
+		if (g_connMotor) {
 			pDC->SetBkColor(RGB(0, 255, 0));
 			return m_brushGreen;
 		}
@@ -434,7 +468,7 @@ HBRUSH CMastercentralitaDlg::OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor)
 	}
 	// LED de CONEXIÓN Luces
 	if (controlID == IDC_LED_LUCES) {
-		if (m_modbusLuces.EstaConectado()) {
+		if (g_connLuces) {
 			pDC->SetBkColor(RGB(0, 255, 0));
 			return m_brushGreen;
 		}
@@ -444,69 +478,18 @@ HBRUSH CMastercentralitaDlg::OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor)
 	// TODO:  Return a different brush if the default is not desired
 	return hbr;
 }
-
-//HILOOO PARA comunicar SIN BLOQUEAR
-
-UINT CMastercentralitaDlg::PollingThreadProc(LPVOID pParam)
+LRESULT CMastercentralitaDlg::OnConnChanged(WPARAM, LPARAM)
 {
-	PollingThreadParam* p = (PollingThreadParam*)pParam;
-
-	// Local clients — created here, live here, die here
-	CModbusClient clientAccion, clientMotor, clientLuces;
-
-	clientAccion.Conectar(p->ipAccion, p->portAccion);
-	clientMotor.Conectar(p->ipMotor, p->portMotor);
-	clientLuces.Conectar(p->ipLuces, p->portLuces);
-
-	HWND hWnd = p->hWnd;
-	DWORD pollMs = p->pollMs;
-	volatile bool* pRun = p->pRun;
-	delete p;  
-
-	while (*pRun)
-	{
-		PollingResult* pRes = new PollingResult();
-		pRes->brakeVal = pRes->leftVal = pRes->rightVal = 0;
-		pRes->tempVal = pRes->revVal = 0;
-
-		// ── Read Accionamientos ───────────────────────────────
-		pRes->accionOk =
-			clientAccion.LeerRegistro(0x01, 400, pRes->brakeVal) &&
-			clientAccion.LeerRegistro(0x01, 401, pRes->leftVal) &&
-			clientAccion.LeerRegistro(0x01, 402, pRes->rightVal);
-
-		// ── Read Motor ────────────────────────────────────────
-		pRes->motorOk =
-			clientMotor.LeerRegistro(0x01, 400, pRes->tempVal) &&
-			clientMotor.LeerRegistro(0x01, 401, pRes->revVal);
-
-		// ── Write Luces (only if we have valid accion data) ───
-		pRes->lucesOk = FALSE;
-		if (pRes->accionOk)
-		{
-			pRes->lucesOk =
-				clientLuces.EscribirRegistro(0x01, 500, pRes->brakeVal) &&
-				clientLuces.EscribirRegistro(0x01, 501, pRes->leftVal) &&
-				clientLuces.EscribirRegistro(0x01, 503, pRes->leftVal) &&
-				clientLuces.EscribirRegistro(0x01, 502, pRes->rightVal) &&
-				clientLuces.EscribirRegistro(0x01, 504, pRes->rightVal);
-		}
-
-		// ── Send result to UI thread — non-blocking ───────────
-		// pRes is heap-allocated; OnPollingResult deletes it.
-		::PostMessage(hWnd, WM_POLLING_RESULT, 0, (LPARAM)pRes);
-		Sleep(pollMs);
-	}
-
-	clientAccion.Desconectar();
-	clientMotor.Desconectar();
-	clientLuces.Desconectar();
-
+	GetDlgItem(IDC_LED_ACCIONAMIENTOS6)->Invalidate();
+	GetDlgItem(IDC_LED_ACCIONAMIENTOS6)->UpdateWindow();
+	GetDlgItem(IDC_LED_ACCIONAMIENTOS7)->Invalidate();
+	GetDlgItem(IDC_LED_ACCIONAMIENTOS7)->UpdateWindow();
+	GetDlgItem(IDC_LED_LUCES)->Invalidate();
+	GetDlgItem(IDC_LED_LUCES)->UpdateWindow();
 	return 0;
 }
 
-// ── UI thread receives result, updates controls — never blocks ────────────────
-LRESULT CMastercentralitaDlg::OnPollingResult(WPARAM /*wParam*/, LPARAM lParam)
+LRESULT CMastercentralitaDlg::OnPollingResult(WPARAM wParam, LPARAM lParam)
 {
 	PollingResult* pRes = reinterpret_cast<PollingResult*>(lParam);
 	if (!pRes) return 0;
@@ -535,7 +518,7 @@ LRESULT CMastercentralitaDlg::OnPollingResult(WPARAM /*wParam*/, LPARAM lParam)
 		m_rev = pRes->revVal * 70;
 		UpdateData(FALSE);
 		ActualizarTacometros();
-		s.Format(_T("[%02d:%02d:%02d] Motor - Temp=%d°C  Rev=%d rpm"),
+		s.Format(_T("[%02d:%02d:%02d] Motor - Temp=%d C  Rev=%d rpm"),
 			t.GetHour(), t.GetMinute(), t.GetSecond(), m_temp, m_rev);
 		m_log.SetCurSel(m_log.AddString(s));
 	}
@@ -546,13 +529,238 @@ LRESULT CMastercentralitaDlg::OnPollingResult(WPARAM /*wParam*/, LPARAM lParam)
 		m_log.AddString(s);
 	}
 
-	if (pRes->accionOk && !pRes->lucesOk)
+	delete pRes;
+	return 0;
+}
+
+
+
+
+
+
+//HILOOO PARA comunicar SIN BLOQUEAR uno escritura otra lectura y el "main" para dibujar
+
+UINT CMastercentralitaDlg::ReadThreadProc(LPVOID pParam)
+{
+	ReadThreadParam* p = (ReadThreadParam*)pParam;
+	CModbusClient clientAccion, clientMotor;
+
+	clientAccion.Conectar(p->ipAccion, p->portAccion);
+	clientMotor.Conectar(p->ipMotor, p->portMotor);
+
+	HWND hWnd = p->hWnd;
+	DWORD pollMs = p->pollMs;
+	volatile bool* pRun = p->pRun;
+	delete p;
+
+	g_connAccion = true;
+	g_connMotor = true;
+	::PostMessage(hWnd, WM_CONN_CHANGED, 0, 0);
+
+	while (*pRun)
 	{
-		s.Format(_T("[%02d:%02d:%02d] Error escritura Luces"),
-			t.GetHour(), t.GetMinute(), t.GetSecond());
-		m_log.AddString(s);
+		PollingResult* pRes = new PollingResult();
+		short brakeVal = 0, leftVal = 0, rightVal = 0;
+		short tempVal = 0, revVal = 0;
+
+		pRes->accionOk =
+			clientAccion.LeerRegistro(0x01, 400, brakeVal) &&
+			clientAccion.LeerRegistro(0x01, 401, leftVal) &&
+			clientAccion.LeerRegistro(0x01, 402, rightVal);
+
+		pRes->motorOk =
+			clientMotor.LeerRegistro(0x01, 400, tempVal) &&
+			clientMotor.LeerRegistro(0x01, 401, revVal);
+
+		if (pRes->accionOk)
+		{
+			// Escribe las globales — el hilo de escritura las leerá
+			g_brake = (brakeVal != 0);
+			g_left = (leftVal != 0);
+			g_right = (rightVal != 0);
+			g_dataReady = true;
+		}
+
+		pRes->brakeVal = brakeVal;
+		pRes->leftVal = leftVal;
+		pRes->rightVal = rightVal;
+		pRes->tempVal = tempVal;
+		pRes->revVal = revVal;
+		pRes->lucesOk = TRUE;  // la escritura la gestiona el otro hilo
+
+		::PostMessage(hWnd, WM_POLLING_RESULT, 0, (LPARAM)pRes);
+
+		Sleep(pollMs);
 	}
 
-	delete pRes;   
+	clientAccion.Desconectar();
+	clientMotor.Desconectar();
+	g_connAccion = false;  
+	g_connMotor = false;
+	::PostMessage(hWnd, WM_CONN_CHANGED, 0, 0);
 	return 0;
+}
+
+UINT CMastercentralitaDlg::WriteThreadProc(LPVOID pParam)
+{
+	WriteThreadParam* p = (WriteThreadParam*)pParam;
+	CModbusClient clientLuces;
+
+	clientLuces.Conectar(p->ipLuces, p->portLuces);
+	HWND hWnd = p->hWnd;
+	DWORD pollMs = p->pollMs;
+	volatile bool* pRun = p->pRun;
+	delete p;
+
+	g_connLuces = true;
+	::PostMessage(hWnd, WM_CONN_CHANGED, 0, 0);
+	while (*pRun)
+	{
+		if (g_dataReady)
+		{
+			// Cast de bool a short para mandar por Modbus
+			short brake = (short)g_brake;
+			short left = (short)g_left;
+			short right = (short)g_right;
+
+			clientLuces.EscribirRegistro(0x01, 500, brake);
+			clientLuces.EscribirRegistro(0x01, 501, left);
+			clientLuces.EscribirRegistro(0x01, 503, left);
+			clientLuces.EscribirRegistro(0x01, 502, right);
+			clientLuces.EscribirRegistro(0x01, 504, right);
+		}
+
+		Sleep(pollMs);
+	}
+
+	clientLuces.Desconectar();
+
+	g_connLuces = false;
+	::PostMessage(hWnd, WM_CONN_CHANGED, 0, 0);
+	return 0;
+}
+
+
+//--------WEB SERVER DESDE UN NAVEGADOR (http://localhost:8080)------------------
+void CWebSocket::OnAccept(int nErrorCode)
+{
+	if (nErrorCode == 0)
+	{
+		CMastercentralitaDlg* pDlg = (CMastercentralitaDlg*)AfxGetMainWnd();
+		pDlg->OnWebAccept();
+	}
+	CAsyncSocket::OnAccept(nErrorCode);
+}
+
+CString CMastercentralitaDlg::GetWebPage()
+{
+	// Auto-refresh cada 1 segundo
+	CString page;
+	page = _T("<html><head><title>Centralita</title>");
+	page += _T("<meta http-equiv='refresh' content='1'>");
+	page += _T("<style>");
+	page += _T("body { font-family: Arial; background:#1a1a2e; color:#eee; text-align:center; }");
+	page += _T("h1 { color:#00d4ff; }");
+	page += _T(".card { display:inline-block; background:#16213e; border-radius:12px;");
+	page += _T("        padding:20px 40px; margin:10px; min-width:150px; }");
+	page += _T(".label { font-size:12px; color:#aaa; text-transform:uppercase; }");
+	page += _T(".value { font-size:36px; font-weight:bold; margin-top:5px; }");
+	page += _T(".on  { color:#00ff88; }");
+	page += _T(".off { color:#555; }");
+	page += _T(".red { color:#ff4444; }");
+	page += _T(".blue{ color:#00d4ff; }");
+	page += _T("</style></head><body>");
+	page += _T("<h1>Centralita Modbus</h1>");
+
+	// ── Accionamientos ────────────────────────────────────────
+	page += _T("<h2>Accionamientos</h2>");
+
+	// Freno
+	CString val;
+	val.Format(_T("<div class='card'><div class='label'>Freno</div>")
+		_T("<div class='value %s'>%s</div></div>"),
+		g_brake ? _T("red") : _T("off"),
+		g_brake ? _T("ON") : _T("OFF"));
+	page += val;
+
+	// Intermitente izquierdo
+	val.Format(_T("<div class='card'><div class='label'>Interm. Izq</div>")
+		_T("<div class='value %s'>%s</div></div>"),
+		g_left ? _T("on") : _T("off"),
+		g_left ? _T("ON") : _T("OFF"));
+	page += val;
+
+	// Intermitente derecho
+	val.Format(_T("<div class='card'><div class='label'>Interm. Der</div>")
+		_T("<div class='value %s'>%s</div></div>"),
+		g_right ? _T("on") : _T("off"),
+		g_right ? _T("ON") : _T("OFF"));
+	page += val;
+
+	// ── Motor ─────────────────────────────────────────────────
+	page += _T("<h2>Motor</h2>");
+
+	val.Format(_T("<div class='card'><div class='label'>Temperatura</div>")
+		_T("<div class='value red'>%d &deg;C</div></div>"),
+		m_temp);
+	page += val;
+
+	val.Format(_T("<div class='card'><div class='label'>Revoluciones</div>")
+		_T("<div class='value blue'>%d rpm</div></div>"),
+		m_rev);
+	page += val;
+
+	// ── Estado conexiones ─────────────────────────────────────
+	page += _T("<h2>Conexiones</h2>");
+
+	val.Format(_T("<div class='card'><div class='label'>Accionamientos</div>")
+		_T("<div class='value %s'>%s</div></div>"),
+		g_connAccion ? _T("on") : _T("off"),
+		g_connAccion ? _T("OK") : _T("--"));
+	page += val;
+
+	val.Format(_T("<div class='card'><div class='label'>Motor</div>")
+		_T("<div class='value %s'>%s</div></div>"),
+		g_connMotor ? _T("on") : _T("off"),
+		g_connMotor ? _T("OK") : _T("--"));
+	page += val;
+
+	val.Format(_T("<div class='card'><div class='label'>Luces</div>")
+		_T("<div class='value %s'>%s</div></div>"),
+		g_connLuces ? _T("on") : _T("off"),
+		g_connLuces ? _T("OK") : _T("--"));
+	page += val;
+
+	page += _T("</body></html>");
+	return page;
+}
+
+void CMastercentralitaDlg::OnWebAccept()
+{
+	CAsyncSocket client;
+	if (!m_webSocket.Accept(client))
+		return;
+
+	char buf[2048] = {};
+	int len = client.Receive(buf, sizeof(buf) - 1);
+	if (len <= 0)
+	{
+		client.Close();
+		return;
+	}
+	buf[len] = 0;
+
+	CString page = GetWebPage();
+	CString header;
+	header.Format(
+		_T("HTTP/1.0 200 OK\r\n")
+		_T("Content-Type: text/html; charset=utf-8\r\n")
+		_T("Content-Length: %d\r\n")
+		_T("Connection: close\r\n\r\n"),
+		page.GetLength());
+
+	// Enviar header + página
+	client.Send(CT2A(header), header.GetLength());
+	client.Send(CT2A(page), page.GetLength());
+	client.Close();
 }

@@ -4,25 +4,50 @@
 
 #pragma once
 #include "ModbusClient.h"
+#include <afxsock.h>
 
+// Globals compartidas entre hilos 
+extern volatile bool g_brake;
+extern volatile bool g_left;
+extern volatile bool g_right;
+extern volatile bool g_dataReady;  // false hasta que el hilo de lectura tiene datos válidos
+extern volatile bool g_connAccion;
+extern volatile bool g_connMotor;
+extern volatile bool g_connLuces;
 
 //THREAD(S) + data structures
 #define WM_POLLING_RESULT (WM_USER + 200)
-
+#define WM_CONN_CHANGED (WM_USER + 201)
 struct PollingResult
 {
 	short  brakeVal, leftVal, rightVal;
 	short  tempVal, revVal;
 	BOOL   accionOk, motorOk, lucesOk;
 };
-struct PollingThreadParam
+
+struct ReadThreadParam
 {
-	CString  ipAccion;    int portAccion;
-	CString  ipMotor;     int portMotor;
-	CString  ipLuces;     int portLuces;
-	DWORD    pollMs;
-	HWND     hWnd;        // PostMessage target
-	volatile bool* pRun;  // thread reads this; UI sets it false to stop
+	CString ipAccion;  int portAccion;
+	CString ipMotor;   int portMotor;
+	DWORD pollMs;
+	HWND hWnd;
+	volatile bool* pRun;
+};
+
+struct WriteThreadParam
+{
+	CString ipLuces;  int portLuces;
+	DWORD pollMs;
+	HWND hWnd;
+	volatile bool* pRun;
+};
+
+class CMastercentralitaDlg;
+
+class CWebSocket : public CAsyncSocket
+{
+public:
+	virtual void OnAccept(int nErrorCode);
 };
 
 // CMastercentralitaDlg dialog
@@ -67,7 +92,7 @@ protected:
 	afx_msg HCURSOR OnQueryDragIcon();
 	afx_msg void OnTimer(UINT_PTR nIDEvent);
 	afx_msg LRESULT OnPollingResult(WPARAM wParam, LPARAM lParam);
-	
+	afx_msg LRESULT OnConnChanged(WPARAM wParam, LPARAM lParam);
 	DECLARE_MESSAGE_MAP()
 public:
 	bool m_blinkState;      // true=encendido, false=apagado para intermitentes
@@ -79,7 +104,9 @@ public:
 	CStatic m_led2i;
 	CStatic m_led2_d;
 	CStatic m_led2f;
-
+	CWebSocket  m_webSocket; 
+	void OnWebAccept(); 
+	CString GetWebPage(); 
 	void DibujarTacometro(CStatic& control, int valor, int maxValor, COLORREF colorAguja);
 	void ActualizarTacometros();
 
@@ -99,8 +126,11 @@ public:
 	CStatic m_rpm_pic;
 private:
 	
-	CWinThread* m_pPollingThread;
+	CWinThread* m_pReadThread;
+	CWinThread* m_pWriteThread;
 	volatile bool m_bThreadRunning;
 
-	static UINT PollingThreadProc(LPVOID pParam);
+	static UINT ReadThreadProc(LPVOID pParam);
+	static UINT WriteThreadProc(LPVOID pParam);
 };
+
