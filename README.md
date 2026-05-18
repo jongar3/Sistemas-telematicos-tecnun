@@ -9,7 +9,7 @@ El proyecto implementa un sistema de monitorización industrial basado en el pro
 ## Arquitectura
 
 ```
-Centralita (Master) → (puerto 8080) → "Servidor web"
+Centralita (Master) → (puerto 8082) → "Servidor web"
     ├── Slave - Motor          (puerto 3502) → temperatura y revoluciones
     ├── Slave - Accionamientos (puerto 3503) → freno, izquierda, derecha
     └── Slave - Luces          (puerto 3504) → salidas controladas por el maestro
@@ -43,7 +43,7 @@ Los esclavos tienen sus propias ventanas de configuración: el de motor expone s
 
 ## Web server 
 
-La centralita incluye un servidor HTTP embebido en `localhost:8080` que sirve una página con auto-refresh cada segundo. Muestra el estado de los tres esclavos (temperatura, rpm, accionamientos y estado de conexión) con un dashboard en HTML/CSS. El dashboard se sirve mediante la sofisticada técnica de concatenar etiquetas HTML a mano dentro de un `CString`. Porque, ¿quién usaría frameworks modernos de servidor o un motor de plantillas en pleno 2026?
+La centralita incluye un servidor HTTP embebido en `localhost:8082` que sirve una página con auto-refresh cada segundo. Muestra el estado de los tres esclavos (temperatura, rpm, accionamientos y estado de conexión) con un dashboard en HTML/CSS. El dashboard se sirve mediante la sofisticada técnica de concatenar etiquetas HTML a mano dentro de un `CString`. Porque, ¿quién usaría frameworks modernos de servidor o un motor de plantillas en pleno 2026?
 
 ## Cómo probar sin los esclavo ***OPCIONAL***
 

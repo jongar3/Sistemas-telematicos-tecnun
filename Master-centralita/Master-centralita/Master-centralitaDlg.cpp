@@ -160,8 +160,8 @@ BOOL CMastercentralitaDlg::OnInitDialog()
 
 	UpdateData(FALSE);
 
-	// ── Web server en puerto 8080 ──────────────────────
-	if (m_webSocket.Create(8080, SOCK_STREAM))
+	// ── Web server en puerto 8082 ──────────────────────
+	if (m_webSocket.Create(8082, SOCK_STREAM))
 	{
 		m_webSocket.Listen();
 		m_log.AddString(_T("Web server escuchando en http://127.0.0.1:8080"));
@@ -534,10 +534,6 @@ LRESULT CMastercentralitaDlg::OnPollingResult(WPARAM wParam, LPARAM lParam)
 }
 
 
-
-
-
-
 //HILOOO PARA comunicar SIN BLOQUEAR uno escritura otra lectura y el "main" para dibujar
 
 UINT CMastercentralitaDlg::ReadThreadProc(LPVOID pParam)
@@ -545,36 +541,73 @@ UINT CMastercentralitaDlg::ReadThreadProc(LPVOID pParam)
 	ReadThreadParam* p = (ReadThreadParam*)pParam;
 	CModbusClient clientAccion, clientMotor;
 
-	clientAccion.Conectar(p->ipAccion, p->portAccion);
-	clientMotor.Conectar(p->ipMotor, p->portMotor);
-
+	// Extraemos TODOS los parámetros antes de liberar la estructura de memoria
 	HWND hWnd = p->hWnd;
 	DWORD pollMs = p->pollMs;
 	volatile bool* pRun = p->pRun;
+	CString ipAccion = p->ipAccion;   int portAccion = p->portAccion;
+	CString ipMotor = p->ipMotor;     int portMotor = p->portMotor;
 	delete p;
-
-	g_connAccion = true;
-	g_connMotor = true;
-	::PostMessage(hWnd, WM_CONN_CHANGED, 0, 0);
 
 	while (*pRun)
 	{
+		if (!clientAccion.EstaConectado())
+		{
+			clientAccion.Conectar(ipAccion, portAccion);
+		}
+		if (!clientMotor.EstaConectado())
+		{
+			clientMotor.Conectar(ipMotor, portMotor);
+		}
+
+		if (g_connAccion != clientAccion.EstaConectado() || g_connMotor != clientMotor.EstaConectado())
+		{
+			g_connAccion = clientAccion.EstaConectado();
+			g_connMotor = clientMotor.EstaConectado();
+			::PostMessage(hWnd, WM_CONN_CHANGED, 0, 0); // Notificar a la UI
+		}
+
 		PollingResult* pRes = new PollingResult();
 		short brakeVal = 0, leftVal = 0, rightVal = 0;
 		short tempVal = 0, revVal = 0;
 
-		pRes->accionOk =
-			clientAccion.LeerRegistro(0x01, 400, brakeVal) &&
-			clientAccion.LeerRegistro(0x01, 401, leftVal) &&
-			clientAccion.LeerRegistro(0x01, 402, rightVal);
+		
+		if (clientAccion.EstaConectado())
+		{
+			pRes->accionOk =
+				clientAccion.LeerRegistro(0x01, 400, brakeVal) &&
+				clientAccion.LeerRegistro(0x01, 401, leftVal) &&
+				clientAccion.LeerRegistro(0x01, 402, rightVal);
 
-		pRes->motorOk =
-			clientMotor.LeerRegistro(0x01, 400, tempVal) &&
-			clientMotor.LeerRegistro(0x01, 401, revVal);
+			if (!pRes->accionOk)
+			{
+				// Si falla el Modbus, forzamos cierre para que en la prox. vuelta intente reconectar
+				clientAccion.Desconectar();
+			}
+		}
+		else
+		{
+			pRes->accionOk = FALSE;
+		}
+
+		if (clientMotor.EstaConectado())
+		{
+			pRes->motorOk =
+				clientMotor.LeerRegistro(0x01, 400, tempVal) &&
+				clientMotor.LeerRegistro(0x01, 401, revVal);
+
+			if (!pRes->motorOk)
+			{
+				clientMotor.Desconectar();
+			}
+		}
+		else
+		{
+			pRes->motorOk = FALSE;
+		}
 
 		if (pRes->accionOk)
 		{
-			// Escribe las globales — el hilo de escritura las leerá
 			g_brake = (brakeVal != 0);
 			g_left = (leftVal != 0);
 			g_right = (rightVal != 0);
@@ -586,16 +619,16 @@ UINT CMastercentralitaDlg::ReadThreadProc(LPVOID pParam)
 		pRes->rightVal = rightVal;
 		pRes->tempVal = tempVal;
 		pRes->revVal = revVal;
-		pRes->lucesOk = TRUE;  // la escritura la gestiona el otro hilo
+		pRes->lucesOk = TRUE;
 
 		::PostMessage(hWnd, WM_POLLING_RESULT, 0, (LPARAM)pRes);
 
 		Sleep(pollMs);
 	}
-
+	
 	clientAccion.Desconectar();
 	clientMotor.Desconectar();
-	g_connAccion = false;  
+	g_connAccion = false;
 	g_connMotor = false;
 	::PostMessage(hWnd, WM_CONN_CHANGED, 0, 0);
 	return 0;
@@ -606,35 +639,50 @@ UINT CMastercentralitaDlg::WriteThreadProc(LPVOID pParam)
 	WriteThreadParam* p = (WriteThreadParam*)pParam;
 	CModbusClient clientLuces;
 
-	clientLuces.Conectar(p->ipLuces, p->portLuces);
 	HWND hWnd = p->hWnd;
 	DWORD pollMs = p->pollMs;
 	volatile bool* pRun = p->pRun;
+	CString ipLuces = p->ipLuces;     int portLuces = p->portLuces;
 	delete p;
 
-	g_connLuces = true;
-	::PostMessage(hWnd, WM_CONN_CHANGED, 0, 0);
 	while (*pRun)
 	{
-		if (g_dataReady)
+
+		if (!clientLuces.EstaConectado())
 		{
-			// Cast de bool a short para mandar por Modbus
+			clientLuces.Conectar(ipLuces, portLuces);
+		}
+
+		if (g_connLuces != clientLuces.EstaConectado())
+		{
+			g_connLuces = clientLuces.EstaConectado();
+			::PostMessage(hWnd, WM_CONN_CHANGED, 0, 0);
+		}
+
+		if (clientLuces.EstaConectado() && g_dataReady)
+		{
 			short brake = (short)g_brake;
 			short left = (short)g_left;
 			short right = (short)g_right;
 
-			clientLuces.EscribirRegistro(0x01, 500, brake);
-			clientLuces.EscribirRegistro(0x01, 501, left);
-			clientLuces.EscribirRegistro(0x01, 503, left);
-			clientLuces.EscribirRegistro(0x01, 502, right);
-			clientLuces.EscribirRegistro(0x01, 504, right);
+			BOOL writeOk =
+				clientLuces.EscribirRegistro(0x01, 500, brake) &&
+				clientLuces.EscribirRegistro(0x01, 501, left) &&
+				clientLuces.EscribirRegistro(0x01, 503, left) &&
+				clientLuces.EscribirRegistro(0x01, 502, right) &&
+				clientLuces.EscribirRegistro(0x01, 504, right);
+
+			if (!writeOk)
+			{
+				
+				clientLuces.Desconectar();
+			}
 		}
 
 		Sleep(pollMs);
 	}
 
 	clientLuces.Desconectar();
-
 	g_connLuces = false;
 	::PostMessage(hWnd, WM_CONN_CHANGED, 0, 0);
 	return 0;
