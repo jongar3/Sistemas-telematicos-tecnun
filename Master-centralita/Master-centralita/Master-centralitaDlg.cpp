@@ -24,6 +24,7 @@ volatile bool g_dataReady = false;
 volatile bool g_connAccion = false;
 volatile bool g_connMotor = false;
 volatile bool g_connLuces = false;
+CMastercentralitaDlg* g_pMainDlg = nullptr;
 
 class CAboutDlg : public CDialogEx
 {
@@ -164,13 +165,14 @@ BOOL CMastercentralitaDlg::OnInitDialog()
 	if (m_webSocket.Create(8082, SOCK_STREAM))
 	{
 		m_webSocket.Listen();
-		m_log.AddString(_T("Web server escuchando en http://127.0.0.1:8080"));
+		m_log.AddString(_T("Web server escuchando en http://127.0.0.1:8082"));
 	}
 	else
 	{
 		m_log.AddString(_T("ERROR: no se pudo arrancar el web server"));
 	}
 
+	g_pMainDlg = this;
 	return TRUE;  // return TRUE  unless you set the focus to a control
 }
 
@@ -783,32 +785,76 @@ CString CMastercentralitaDlg::GetWebPage()
 	return page;
 }
 
+
 void CMastercentralitaDlg::OnWebAccept()
 {
-	CAsyncSocket client;
-	if (!m_webSocket.Accept(client))
+	CAsyncSocket clientSocket;
+
+	if (!m_webSocket.Accept(clientSocket))
 		return;
 
-	char buf[2048] = {};
-	int len = client.Receive(buf, sizeof(buf) - 1);
+	SOCKET s = clientSocket.Detach();
+
+	AfxBeginThread(ClientThreadProc, (LPVOID)s);
+}
+
+UINT CMastercentralitaDlg::ClientThreadProc(LPVOID pParam)
+{
+	SOCKET s = (SOCKET)pParam;
+
+	char buf[4096] = {};
+	int len = recv(s, buf, sizeof(buf) - 1, 0);
+
 	if (len <= 0)
 	{
-		client.Close();
-		return;
+		closesocket(s);
+		return 0;
 	}
+
 	buf[len] = 0;
+	CString request(buf);
 
-	CString page = GetWebPage();
-	CString header;
-	header.Format(
-		_T("HTTP/1.0 200 OK\r\n")
-		_T("Content-Type: text/html; charset=utf-8\r\n")
-		_T("Content-Length: %d\r\n")
-		_T("Connection: close\r\n\r\n"),
-		page.GetLength());
+	if (request.Find(_T("GET /favicon.ico")) >= 0)
+	{
+		const char* response =
+			"HTTP/1.1 404 Not Found\r\n"
+			"Content-Length: 0\r\n"
+			"Connection: close\r\n\r\n";
 
-	// Enviar header + página
-	client.Send(CT2A(header), header.GetLength());
-	client.Send(CT2A(page), page.GetLength());
-	client.Close();
+		send(s, response, (int)strlen(response), 0);
+		closesocket(s);
+		return 0;
+	}
+	
+	// Para USAR el puntero de la UI desde un hilo. Lo hacemos GLOBAL
+	if (g_pMainDlg == nullptr)
+	{
+		closesocket(s);
+		return 0;
+	}
+
+	// Llamamos directamente a GetWebPage a través del puntero global "seguro"
+	CString page = g_pMainDlg->GetWebPage();
+
+	
+	CStringA pageA = CW2A(page, CP_UTF8);
+	CStringA headerA;
+
+	headerA.Format(
+		"HTTP/1.1 200 OK\r\n"
+		"Content-Type: text/html; charset=utf-8\r\n"
+		"Content-Length: %d\r\n"
+		"Connection: close\r\n"
+		"Cache-Control: no-cache\r\n"
+		"\r\n",
+		pageA.GetLength());
+
+	send(s, headerA.GetString(), headerA.GetLength(), 0);
+	send(s, pageA.GetString(), pageA.GetLength(), 0);
+
+	
+	shutdown(s, SD_BOTH);
+	closesocket(s);
+
+	return 0;
 }

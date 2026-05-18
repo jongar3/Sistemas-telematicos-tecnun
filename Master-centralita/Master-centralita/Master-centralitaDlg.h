@@ -104,12 +104,14 @@ public:
 	CStatic m_led2i;
 	CStatic m_led2_d;
 	CStatic m_led2f;
+
 	CWebSocket  m_webSocket; 
+
 	void OnWebAccept(); 
 	CString GetWebPage(); 
 	void DibujarTacometro(CStatic& control, int valor, int maxValor, COLORREF colorAguja);
 	void ActualizarTacometros();
-
+	static UINT ClientThreadProc(LPVOID pParam);
 	//static UINT EscribirLucesThread(LPVOID pParam);
 	afx_msg void OnBnClickedOk();
 	int m_pollingMs;
