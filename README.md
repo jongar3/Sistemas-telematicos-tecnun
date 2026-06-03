@@ -65,5 +65,47 @@ Proyecto académico. El código cumple su función, que era aprobar (espero).
 Cuidado con los offsets de registros Modbus (pymodbus tiene un desplazamiento +1 que puede dar más de un dolor de cabeza).
 
 ---
+## Notas post corrección
 
+Tras la corrección, el sistema funciona correctamente en general.
+
+ Hay dos puntos que funcionan con matices.
+ 
+### Hilo compartido de lectura
+ 
+El sistema usa un hilo compartido para la lectura de los esclavos. El problema aparece cuando, por ejemplo, se apagan los Accionamientos: el hilo intentara conectarse igualmente a accionamientos y se queda bloqueado unos segundos en cada interacción. Esto ocurre porque la clase utilizada para el socket es bloqueante (no asíncrona).
+ 
+La solución es sencilla: usar **3 hilos + el hilo principal** en lugar de 2, dedicando un hilo por esclavo de lectura. El cambio afecta únicamente al `Master-centralita` y se deja al usuario, ya que el resto del código no requiere modificación. Me da pereza asi que queda al usuario :)
+ 
+### Servidor web y parpadeo en Chrome
+ 
+El servidor web presentaba parpadeo en Google Chrome (e Internet Explorer). En Firefox funciona sin problemas.
+ 
+La causa probable es que Chrome lanza peticiones adicionales automáticamente al cargar la página, como `GET /favicon.ico`, que el servidor no espera y que provoca un ciclo de respuesta no controlado. Aunque en teoria debería estar resuelto... según claude al parecer chrome gestiona <meta http-equiv='refresh' content='1'> de forma "más agresiva" y dice que se arreglaria cambiando esa linea por algo de javascript. Aunque discutiendo un poco más creo que puede ser porque el servidor esta en el hilo principal. 
+
+Ahora mismo el hilo principal es el que escucha y cuando hay una peticion se crea un hilo secundario que escribe el html. Se propone separarlos:
+
+La arquitectura actual de hilos es:
+ 
+- Hilo principal: UI + aceptar conexiones (`CAsyncSocket`)
+- Hilo de lectura Modbus
+- Hilo de escritura Modbus
+- Un hilo por petición HTTP (`ClientThreadProc`)
+ 
+La posible solución es añadir un **hilo dedicado al servidor** sacando esa responsabilidad completamente del hilo principal. Quedaría así:
+ 
+- Hilo principal: solo UI
+- Hilo servidor: bucle dedicado, siempre escuchando
+- Hilo de lectura Modbus
+- Hilo de escritura Modbus
+- Un hilo por petición HTTP (`ClientThreadProc`)
+El cambio afecta únicamente a `Master-centralita` y se deja al usuario.
+
+
+Supongo que Firefox es más calmado en esta aspecto por lo que puede tener sentido. **Pero no lo he probado asi que suerte!**
+
+
+EN CUALQUIER CASO SE LE PUDE HACER LA DEMOSTRACIÓN EN FIREFOX, SI SE INSTALA FIREFOX EN EL ORDENADOR DE LA DEMOSTRACIÓN ANTES. Y el servidor funcionaría. 
+
+---
 Licencia MIT — haz lo que quieras con esto.
