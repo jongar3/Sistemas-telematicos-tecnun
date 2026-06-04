@@ -52,12 +52,13 @@ El dashboard se sirve mediante la sofisticada técnica de concatenar etiquetas H
 Levanta los tres esclavos simulados con:
 
 ```bash
-pip install pymodbus
+pip install -r requirements.txt
 python tester_server.py
 ```
 
 Esto arranca tres servidores Modbus en localhost (puertos 3502, 3503 y 3504) con valores de prueba precargados. Después arranca el ejecutable del maestro y debería conectar sin problema.
-
+> [!Windows]
+> Si se esta en Windows se sustituye py por python. Con python se suele trabajar con [entornos virtuales](https://docs.python.org/3/library/venv.html).
 ## Nota
 
 Proyecto académico. El código cumple su función, que era aprobar (espero). 
